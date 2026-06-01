@@ -1,5 +1,11 @@
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any
+
+
+class DocumentFileType(StrEnum):
+    MARKDOWN = ".md"
+    TEXT = ".txt"
 
 
 @dataclass(frozen=True)
@@ -32,6 +38,12 @@ class ChunkDraft:
 
 
 @dataclass(frozen=True)
+class LoadedTextDocument:
+    source_name: str
+    content: str
+
+
+@dataclass(frozen=True)
 class RetrievedChunk:
     chunk_id: str
     document_id: str
@@ -52,4 +64,3 @@ class SparseEmbedding:
 class EmbeddedText:
     dense: list[float]
     sparse: SparseEmbedding
-

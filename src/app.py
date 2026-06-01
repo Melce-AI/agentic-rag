@@ -36,6 +36,7 @@ app = FastAPI(
 
     Features:
     - Async endpoint support
+    - JSON and file-upload document ingest
     - Global exception handling
     - Standard JSON error format
     - OpenAPI documentation

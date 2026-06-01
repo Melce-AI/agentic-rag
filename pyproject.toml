@@ -15,6 +15,7 @@ dependencies = [
     "streamlit>=1.42.2",
     "watchdog>=6.0.0",
     "mcp[cli]>=1.27.2",
+    "python-multipart>=0.0.20",
 ]
 
 [dependency-groups]
