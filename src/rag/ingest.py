@@ -1,0 +1,119 @@
+import datetime as dt
+import hashlib
+import uuid
+
+from src.core.config import get_settings
+from src.core.exceptions import AppException, RagConfigurationError, RagIngestError, RagValidationError
+from src.rag.chunking import HeadingAwareChunker
+from src.rag.embeddings import EmbeddingProvider, FastEmbedProvider
+from src.rag.models import Chunk, Document
+from src.storage.qdrant_client import QdrantManager, qdrant_manager
+
+
+class DocumentIngestService:
+    def __init__(
+        self,
+        vector_store: QdrantManager = qdrant_manager,
+        embedding_provider: EmbeddingProvider | None = None,
+        chunker: HeadingAwareChunker | None = None,
+    ) -> None:
+        settings = get_settings()
+        self.vector_store = vector_store
+        self.embedding_provider = embedding_provider or FastEmbedProvider()
+        try:
+            self.chunker = chunker or HeadingAwareChunker(
+                max_chars=settings.RAG_CHUNK_MAX_CHARS,
+                overlap_chars=settings.RAG_CHUNK_OVERLAP_CHARS,
+            )
+        except ValueError as exc:
+            raise RagConfigurationError(
+                "Invalid RAG chunking configuration",
+                details={
+                    "max_chars": settings.RAG_CHUNK_MAX_CHARS,
+                    "overlap_chars": settings.RAG_CHUNK_OVERLAP_CHARS,
+                    "error": str(exc),
+                },
+            ) from exc
+
+    async def ingest_document(
+        self,
+        *,
+        source_name: str,
+        content: str,
+        tenant_id: str,
+    ) -> dict:
+        if not source_name.strip():
+            raise RagValidationError("source_name must not be empty")
+        if not content.strip():
+            raise RagValidationError("content must not be empty")
+
+        try:
+            chunks = self.chunker.split(content)
+            if not chunks:
+                raise RagValidationError("document did not produce any chunks")
+
+            content_hash = self._sha256(content)
+            document_id = self._stable_uuid(f"{tenant_id}:{source_name}:{content_hash}")
+            document = Document(
+                document_id=document_id,
+                tenant_id=tenant_id,
+                source_name=source_name,
+                content_hash=content_hash,
+            )
+            embeddings = self.embedding_provider.embed_documents([chunk.text for chunk in chunks])
+            created_at = dt.datetime.now(dt.timezone.utc).isoformat()
+
+            records = []
+            for chunk, embedding in zip(chunks, embeddings):
+                chunk_id = self._stable_uuid(f"{document_id}:{content_hash}:{chunk.chunk_index}")
+                stored_chunk = Chunk(
+                    chunk_id=chunk_id,
+                    document_id=document.document_id,
+                    tenant_id=document.tenant_id,
+                    text=chunk.text,
+                    heading_path=chunk.heading_path,
+                    chunk_index=chunk.chunk_index,
+                    source_name=document.source_name,
+                    created_at=created_at,
+                    content_hash=document.content_hash,
+                )
+                records.append(
+                    {
+                        "id": stored_chunk.chunk_id,
+                        "dense_vector": embedding.dense,
+                        "sparse_indices": embedding.sparse.indices,
+                        "sparse_values": embedding.sparse.values,
+                        "payload": {
+                            "tenant_id": stored_chunk.tenant_id,
+                            "document_id": stored_chunk.document_id,
+                            "chunk_id": stored_chunk.chunk_id,
+                            "source_name": stored_chunk.source_name,
+                            "heading_path": stored_chunk.heading_path,
+                            "chunk_index": stored_chunk.chunk_index,
+                            "text": stored_chunk.text,
+                            "created_at": stored_chunk.created_at,
+                            "content_hash": stored_chunk.content_hash,
+                        },
+                    }
+                )
+
+            await self.vector_store.upsert_chunks(records)
+            return {
+                "document_id": document.document_id,
+                "chunk_count": len(records),
+                "status": "ingested",
+            }
+        except AppException:
+            raise
+        except Exception as exc:
+            raise RagIngestError(
+                details={"source_name": source_name, "tenant_id": tenant_id, "error": str(exc)}
+            ) from exc
+
+    @staticmethod
+    def _sha256(content: str) -> str:
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _stable_uuid(value: str) -> str:
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, value))

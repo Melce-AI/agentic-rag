@@ -2,7 +2,8 @@ import logging
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http.models import (
     Distance, VectorParams, SparseVectorParams, PointStruct, 
-    SparseVector, PayloadSchemaType
+    SparseVector, PayloadSchemaType, Prefetch, FusionQuery, Fusion,
+    Filter, FieldCondition, MatchValue
 )
 from src.core.config import get_settings
 from src.core.exceptions import (
@@ -104,25 +105,128 @@ class QdrantManager:
         """
         Standardized document insertion for Hybrid Search.
         """
+        await self.upsert_chunks(
+            [
+                {
+                    "id": doc_id,
+                    "dense_vector": dense_vector,
+                    "sparse_indices": sparse_indices,
+                    "sparse_values": sparse_values,
+                    "payload": payload,
+                }
+            ]
+        )
+
+    async def upsert_chunks(self, records: list[dict]):
+        """
+        Batch chunk insertion for hybrid dense+sparse search.
+        """
         try:
             await self.client.upsert(
                 collection_name=self.collection_name,
                 points=[
                     PointStruct(
-                        id=doc_id,
+                        id=record["id"],
                         vector={
-                            self.dense_vector_name: dense_vector,
+                            self.dense_vector_name: record["dense_vector"],
                             self.sparse_vector_name: SparseVector(
-                                indices=sparse_indices,
-                                values=sparse_values
+                                indices=record["sparse_indices"],
+                                values=record["sparse_values"]
                             )
                         },
-                        payload=payload
+                        payload=record["payload"]
                     )
+                    for record in records
                 ]
             )
         except Exception as e:
             raise VectorStoreOperationError(operation="upsert", details={"error": str(e)})
+
+    async def query_hybrid(
+        self,
+        *,
+        dense_vector: list[float],
+        sparse_indices: list[int],
+        sparse_values: list[float],
+        tenant_id: str,
+        limit: int = 20,
+    ):
+        """
+        Runs Qdrant hybrid retrieval with RRF over dense and sparse named vectors.
+        """
+        query_filter = Filter(
+            must=[
+                FieldCondition(
+                    key="tenant_id",
+                    match=MatchValue(value=tenant_id),
+                )
+            ]
+        )
+
+        try:
+            response = await self.client.query_points(
+                collection_name=self.collection_name,
+                prefetch=[
+                    Prefetch(
+                        query=dense_vector,
+                        using=self.dense_vector_name,
+                        limit=limit,
+                    ),
+                    Prefetch(
+                        query=SparseVector(indices=sparse_indices, values=sparse_values),
+                        using=self.sparse_vector_name,
+                        limit=limit,
+                    ),
+                ],
+                query=FusionQuery(fusion=Fusion.RRF),
+                query_filter=query_filter,
+                limit=limit,
+                with_payload=True,
+                with_vectors=False,
+            )
+            return response.points
+        except Exception as e:
+            raise VectorStoreOperationError(operation="hybrid_search", details={"error": str(e)})
+
+    async def hybrid_search(
+        self,
+        *,
+        dense_vector: list[float],
+        sparse_indices: list[int],
+        sparse_values: list[float],
+        tenant_id: str,
+        limit: int = 20,
+    ):
+        return await self.query_hybrid(
+            dense_vector=dense_vector,
+            sparse_indices=sparse_indices,
+            sparse_values=sparse_values,
+            tenant_id=tenant_id,
+            limit=limit,
+        )
+
+    async def delete_by_document_id(self, *, document_id: str, tenant_id: str):
+        """
+        Deletes all chunks for a document inside one tenant boundary.
+        """
+        try:
+            await self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=Filter(
+                    must=[
+                        FieldCondition(
+                            key="tenant_id",
+                            match=MatchValue(value=tenant_id),
+                        ),
+                        FieldCondition(
+                            key="document_id",
+                            match=MatchValue(value=document_id),
+                        ),
+                    ]
+                ),
+            )
+        except Exception as e:
+            raise VectorStoreOperationError(operation="delete_by_document_id", details={"error": str(e)})
 
     async def health_check(self) -> dict:
         """

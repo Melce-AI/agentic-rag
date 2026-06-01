@@ -5,8 +5,8 @@ from typing import Optional
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-class Settings(BaseSettings):
 
+class Settings(BaseSettings):
     # General Application Settings
     PROJECT_NAME: str = "Agentic RAG API"
     VERSION: str = "1.0.0"
@@ -28,15 +28,23 @@ class Settings(BaseSettings):
     QDRANT_GRPC_PORT: int = 6334
     QDRANT_API_KEY: Optional[SecretStr] = None
     QDRANT_COLLECTION_NAME: str = "company_documents"
-    QDRANT_VECTOR_SIZE: int = 384 #384 genelde all-MiniLM-L6-v2 gibi popüler embedding modellerinin boyutudur
-    
+    QDRANT_VECTOR_SIZE: int = 384
+
+    # Advanced RAG Settings
+    RAG_DENSE_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    RAG_SPARSE_MODEL: str = "Qdrant/bm25"
+    RAG_CHUNK_MAX_CHARS: int = 1200
+    RAG_CHUNK_OVERLAP_CHARS: int = 150
+    RAG_RETRIEVAL_CANDIDATES: int = 20
+    RAG_TOP_K: int = 5
 
     # Environment Variables (.env) Reading Rules
     model_config = SettingsConfigDict(
         env_file=pathlib.Path(".env"),
         env_file_encoding="utf-8",
-        extra="ignore"
+        extra="ignore",
     )
+
 
 @lru_cache()
 def get_settings() -> Settings:

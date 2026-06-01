@@ -2,17 +2,16 @@ import logging
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi import HTTPException
 
-from src.core.exceptions import AppException
 from src.core.exception_handlers import (
     app_exception_handler,
-    validation_exception_handler,
     http_exception_handler,
     unhandled_exception_handler,
+    validation_exception_handler,
 )
+from src.core.exceptions import AppException
 from src.core.logger import setup_logging
 from src.storage.qdrant_client import qdrant_manager
 
@@ -23,11 +22,9 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup
     logger.info("Application is starting.")
     await qdrant_manager.init_collection()
     yield
-    # shutdown
     logger.info("Application is shutting down.")
     await qdrant_manager.close()
 
@@ -35,21 +32,22 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Enterprise Document Processing API",
     description="""
-    Kurumsal seviyede doküman işleme ve veri servisleri sunan API.
+    Enterprise document processing and RAG retrieval API.
 
-    Özellikler:
-    - Asenkron endpoint desteği
+    Features:
+    - Async endpoint support
     - Global exception handling
-    - Standart JSON hata formatı
-    - OpenAPI dokümantasyonu
+    - Standard JSON error format
+    - OpenAPI documentation
     - Request tracing
     """,
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_tags=[
-        {"name": "Health", "description": "Servis sağlık kontrolü endpointleri"},
-        {"name": "Documents", "description": "Doküman işleme işlemleri"},
+        {"name": "Health", "description": "Service health checks"},
+        {"name": "Documents", "description": "Document ingest operations"},
+        {"name": "Search", "description": "Hybrid RAG retrieval operations"},
     ],
     lifespan=lifespan,
 )
@@ -64,6 +62,7 @@ async def add_request_id_middleware(request: Request, call_next):
 
 
 from src.api.routers.documents import router as documents_router
+from src.api.routers.search import router as search_router
 
 # Register exception handlers
 app.add_exception_handler(AppException, app_exception_handler)
@@ -72,6 +71,7 @@ app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(documents_router)
+app.include_router(search_router)
 
 
 @app.get("/health", tags=["Health"])

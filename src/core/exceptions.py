@@ -74,3 +74,69 @@ class VectorStoreOperationError(VectorStoreError):
             status_code=500,
             details=details,
         )
+
+
+class RagError(AppException):
+    def __init__(
+        self,
+        message: str,
+        code: str = "RAG_00",
+        status_code: int = 500,
+        details: Optional[Any] = None,
+    ):
+        super().__init__(
+            code=code,
+            message=message,
+            status_code=status_code,
+            details=details,
+        )
+
+
+class RagValidationError(RagError):
+    def __init__(self, message: str, details: Optional[Any] = None):
+        super().__init__(
+            code="RAG_422",
+            message=message,
+            status_code=422,
+            details=details,
+        )
+
+
+class RagConfigurationError(RagError):
+    def __init__(self, message: str, details: Optional[Any] = None):
+        super().__init__(
+            code="RAG_CFG_500",
+            message=message,
+            status_code=500,
+            details=details,
+        )
+
+
+class RagEmbeddingError(RagError):
+    def __init__(self, details: Optional[Any] = None):
+        super().__init__(
+            code="RAG_EMBED_500",
+            message="Embedding generation failed",
+            status_code=500,
+            details=details,
+        )
+
+
+class RagIngestError(RagError):
+    def __init__(self, details: Optional[Any] = None):
+        super().__init__(
+            code="RAG_INGEST_500",
+            message="Document ingest failed",
+            status_code=500,
+            details=details,
+        )
+
+
+class RagRetrievalError(RagError):
+    def __init__(self, details: Optional[Any] = None):
+        super().__init__(
+            code="RAG_SEARCH_500",
+            message="Hybrid retrieval failed",
+            status_code=500,
+            details=details,
+        )
