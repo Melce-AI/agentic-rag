@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.135.1",
+    "fastembed>=0.7.3",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.7.1",
     "qdrant-client>=1.13.2",
@@ -14,4 +15,9 @@ dependencies = [
     "streamlit>=1.42.2",
     "watchdog>=6.0.0",
     "mcp[cli]>=1.27.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
 ]

@@ -217,3 +217,5 @@ ignored/
 logs/
 *.log
 *.jsonl
+
+.vscode/
