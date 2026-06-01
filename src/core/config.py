@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     RAG_RETRIEVAL_CANDIDATES: int = 20
     RAG_TOP_K: int = 5
 
+    # Reranking: a cross-encoder re-scores the candidates before top_k is cut.
+    RAG_RERANK_ENABLED: bool = True
+    RAG_RERANK_MODEL: str = "BAAI/bge-reranker-base"
+
     # Environment Variables (.env) Reading Rules
     model_config = SettingsConfigDict(
         env_file=pathlib.Path(".env"),

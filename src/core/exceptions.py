@@ -140,3 +140,13 @@ class RagRetrievalError(RagError):
             status_code=500,
             details=details,
         )
+
+
+class RagRerankError(RagError):
+    def __init__(self, details: Optional[Any] = None):
+        super().__init__(
+            code="RAG_RERANK_500",
+            message="Reranking failed",
+            status_code=500,
+            details=details,
+        )

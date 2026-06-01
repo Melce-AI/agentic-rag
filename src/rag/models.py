@@ -27,7 +27,6 @@ class Chunk:
     source_name: str
     created_at: str
     content_hash: str
-    #chunk_size?
 
 
 @dataclass(frozen=True)

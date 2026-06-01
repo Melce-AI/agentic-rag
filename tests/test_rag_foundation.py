@@ -58,6 +58,23 @@ class FakeVectorStore:
         ]
 
 
+class FakeReranker:
+    """Deterministic stub so retriever tests never load a real cross-encoder.
+
+    With no preset scores it preserves the input order (descending scores).
+    """
+
+    def __init__(self, scores: list[float] | None = None) -> None:
+        self.scores = scores
+        self.calls: list[tuple[str, list[str]]] = []
+
+    def rerank(self, query: str, documents: list[str]) -> list[float]:
+        self.calls.append((query, list(documents)))
+        if self.scores is not None:
+            return self.scores[: len(documents)]
+        return [float(len(documents) - index) for index in range(len(documents))]
+
+
 class FailingEmbeddingProvider:
     def embed_documents(self, texts: list[str]) -> list[EmbeddedText]:
         _ = texts
@@ -164,6 +181,7 @@ def test_retriever_calls_hybrid_search_and_maps_results() -> None:
     retriever = HybridRetriever(
         vector_store=vector_store,
         embedding_provider=FakeEmbeddingProvider(),
+        reranker=FakeReranker(),
     )
 
     results = asyncio.run(retriever.search(query="access policy", tenant_id="default", top_k=1))
@@ -193,6 +211,49 @@ def test_retriever_preserves_app_exceptions() -> None:
         assert exc.code == "RAG_EMBED_500"
     else:
         raise AssertionError("expected RAG embedding error")
+
+
+def test_retriever_reranks_candidates_before_top_k() -> None:
+    class MultiCandidateVectorStore:
+        async def query_hybrid(self, **kwargs):
+            _ = kwargs
+            return [
+                {"score": 0.9, "payload": {"chunk_id": "a", "document_id": "d", "text": "alpha"}},
+                {"score": 0.5, "payload": {"chunk_id": "b", "document_id": "d", "text": "beta"}},
+                {"score": 0.7, "payload": {"chunk_id": "c", "document_id": "d", "text": "gamma"}},
+            ]
+
+    # Reranker promotes 'b' (the lowest retrieval score) to the top.
+    reranker = FakeReranker(scores=[0.1, 0.95, 0.4])
+    retriever = HybridRetriever(
+        vector_store=MultiCandidateVectorStore(),
+        embedding_provider=FakeEmbeddingProvider(),
+        reranker=reranker,
+    )
+
+    results = asyncio.run(retriever.search(query="q", tenant_id="default", top_k=2))
+
+    # Reranker ran on all candidate texts, then top_k was applied to the new order.
+    assert reranker.calls[0][1] == ["alpha", "beta", "gamma"]
+    assert [result.chunk_id for result in results] == ["b", "c"]
+    assert results[0].score == 0.95
+    # The original hybrid score is preserved for observability.
+    assert results[0].metadata["retrieval_score"] == 0.5
+
+
+def test_retriever_without_reranker_orders_by_retrieval_score() -> None:
+    retriever = HybridRetriever(
+        vector_store=FakeVectorStore(),
+        embedding_provider=FakeEmbeddingProvider(),
+        reranker=None,
+    )
+    retriever.reranker = None  # explicitly disable, bypassing the config default
+
+    results = asyncio.run(retriever.search(query="q", tenant_id="default", top_k=1))
+
+    assert results[0].chunk_id == "chunk-1"
+    assert results[0].score == 0.8
+    assert "retrieval_score" not in results[0].metadata
 
 
 def test_retriever_top_k_sorting_is_deterministic() -> None:
