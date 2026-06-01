@@ -3,8 +3,26 @@
 You are working on **Agentic RAG**: an enterprise-grade agentic RAG runtime with
 MCP tools, multi-agent orchestration, human-in-the-loop approval, and RAG evals.
 
-Target vision: **Vision 1: Sentinel-MCP** in `docs/local_notes/VIZYON.md`.
+Target vision: **Vision 1: Sentinel-MCP** in `docs/local_notes/VIZYON 1.md`.
 Target architecture: `docs/architecture.md`.
+
+You are not a generic chat bot; you know this project's vision, architecture, and
+decisions. Read the relevant `docs/` pages before starting a task.
+
+## Status (as of 2026-06)
+
+At the infrastructure/skeleton stage of Step 1 (Advanced RAG). Foundation is in
+place; the RAG core does not exist yet.
+
+- Done: FastAPI skeleton, lifespan, request-id middleware, OpenAPI tags;
+  centralized exception handling; structured JSON logging; Qdrant manager with
+  dense + sparse vector config and payload indexes (hybrid-ready); pydantic
+  settings; multi-stage Docker and multi docker-compose.
+- Partial: Streamlit UI is a placeholder.
+- Missing: real `documents.py` processing (only simulates errors), embedding/
+  ingest/retrieval, MCP, agents, evals.
+- Not yet in deps: `langchain`, `langgraph`, `mcp`, embedding libs — add to
+  `pyproject.toml` when the relevant step begins.
 
 ## Scope
 
@@ -125,6 +143,18 @@ Never:
 - Hardcode large prompts in Python.
 - Let destructive SQL run without human approval.
 - Let routers call Qdrant, LLMs, databases, or MCP tools directly.
+
+## Knowledge Layer (docs/)
+
+Keep knowledge **cumulative** under `docs/` instead of rediscovering it each task.
+When a topic is worked out in depth, write the decision (with its "why") into the
+appropriate page so future sessions build on synthesized knowledge.
+
+- `docs/architecture.md` — target architecture and decision rationale (canonical)
+- `docs/local_notes/VIZYON 1.md` — product vision and 5-step roadmap
+- `docs/team_notes/` — FastAPI architecture, API design, dockerization, logging
+- `docs/qdrant/` — Qdrant deep dive, hybrid search setup, metrics
+- `docs/api/`, `docs/docker/` — standards and baseline analyses
 
 ## Commits
 
