@@ -132,6 +132,16 @@ class RagIngestError(RagError):
         )
 
 
+class RagDeleteError(RagError):
+    def __init__(self, details: Optional[Any] = None):
+        super().__init__(
+            code="RAG_DELETE_500",
+            message="Document deletion failed",
+            status_code=500,
+            details=details,
+        )
+
+
 class RagRetrievalError(RagError):
     def __init__(self, details: Optional[Any] = None):
         super().__init__(

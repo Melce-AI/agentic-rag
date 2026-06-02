@@ -1,8 +1,8 @@
-from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 
 from src.rag.ingest import DocumentIngestService
 from src.rag.loaders import load_text_document
-from src.schemas.documents import DocumentIngestRequest, DocumentIngestResult
+from src.schemas.documents import DocumentDeleteResult, DocumentIngestRequest, DocumentIngestResult
 from src.schemas.response import SuccessResponse
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -32,6 +32,19 @@ async def upload_document(
     result = await document_ingest_service.ingest_document(
         source_name=loaded_document.source_name,
         content=loaded_document.content,
+        tenant_id=tenant_id,
+    )
+    return SuccessResponse(data=result, request_id=request.state.request_id)
+
+
+@router.delete("/{document_id}", response_model=SuccessResponse[DocumentDeleteResult])
+async def delete_document(
+    document_id: str,
+    request: Request,
+    tenant_id: str = Query(..., min_length=1),
+):
+    result = await document_ingest_service.delete_document(
+        document_id=document_id,
         tenant_id=tenant_id,
     )
     return SuccessResponse(data=result, request_id=request.state.request_id)

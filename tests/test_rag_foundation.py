@@ -36,9 +36,13 @@ class FakeVectorStore:
     def __init__(self) -> None:
         self.upserted_records = []
         self.search_calls = []
+        self.deleted_documents = []
 
     async def upsert_chunks(self, records: list[dict]) -> None:
         self.upserted_records = records
+
+    async def delete_by_document_id(self, **kwargs) -> None:
+        self.deleted_documents.append(kwargs)
 
     async def query_hybrid(self, **kwargs):
         self.search_calls.append(kwargs)
@@ -176,6 +180,20 @@ def test_ingest_service_wraps_unexpected_errors() -> None:
         raise AssertionError("expected RAG ingest error")
 
 
+def test_ingest_service_deletes_document_by_tenant_boundary() -> None:
+    vector_store = FakeVectorStore()
+    service = DocumentIngestService(
+        vector_store=vector_store,
+        embedding_provider=FakeEmbeddingProvider(),
+        chunker=HeadingAwareChunker(max_chars=120, overlap_chars=10),
+    )
+
+    result = asyncio.run(service.delete_document(document_id="doc-1", tenant_id="default"))
+
+    assert result == {"document_id": "doc-1", "tenant_id": "default", "status": "deleted"}
+    assert vector_store.deleted_documents == [{"document_id": "doc-1", "tenant_id": "default"}]
+
+
 def test_retriever_calls_hybrid_search_and_maps_results() -> None:
     vector_store = FakeVectorStore()
     retriever = HybridRetriever(
@@ -286,6 +304,24 @@ def test_ingest_endpoint_returns_ingest_result(monkeypatch) -> None:
     body = response.json()
     assert body["success"] is True
     assert body["data"] == {"document_id": "doc-1", "chunk_count": 2, "status": "ingested"}
+    assert body["request_id"]
+
+
+def test_delete_document_endpoint_returns_delete_result(monkeypatch) -> None:
+    class FakeIngestService:
+        async def delete_document(self, **kwargs):
+            assert kwargs == {"document_id": "doc-1", "tenant_id": "default"}
+            return {"document_id": "doc-1", "tenant_id": "default", "status": "deleted"}
+
+    monkeypatch.setattr(documents_router, "document_ingest_service", FakeIngestService())
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.delete("/documents/doc-1", params={"tenant_id": "default"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"] == {"document_id": "doc-1", "tenant_id": "default", "status": "deleted"}
     assert body["request_id"]
 
 

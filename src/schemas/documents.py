@@ -11,3 +11,9 @@ class DocumentIngestResult(BaseModel):
     document_id: str
     chunk_count: int
     status: str
+
+
+class DocumentDeleteResult(BaseModel):
+    document_id: str
+    tenant_id: str
+    status: str

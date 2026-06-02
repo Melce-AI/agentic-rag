@@ -3,7 +3,13 @@ import hashlib
 import uuid
 
 from src.core.config import get_settings
-from src.core.exceptions import AppException, RagConfigurationError, RagIngestError, RagValidationError
+from src.core.exceptions import (
+    AppException,
+    RagConfigurationError,
+    RagDeleteError,
+    RagIngestError,
+    RagValidationError,
+)
 from src.rag.chunking import HeadingAwareChunker
 from src.rag.embeddings import EmbeddingProvider, FastEmbedProvider
 from src.rag.models import Chunk, Document
@@ -108,6 +114,29 @@ class DocumentIngestService:
         except Exception as exc:
             raise RagIngestError(
                 details={"source_name": source_name, "tenant_id": tenant_id, "error": str(exc)}
+            ) from exc
+
+    async def delete_document(self, *, document_id: str, tenant_id: str) -> dict:
+        if not document_id.strip():
+            raise RagValidationError("document_id must not be empty")
+        if not tenant_id.strip():
+            raise RagValidationError("tenant_id must not be empty")
+
+        try:
+            await self.vector_store.delete_by_document_id(
+                document_id=document_id,
+                tenant_id=tenant_id,
+            )
+            return {
+                "document_id": document_id,
+                "tenant_id": tenant_id,
+                "status": "deleted",
+            }
+        except AppException:
+            raise
+        except Exception as exc:
+            raise RagDeleteError(
+                details={"document_id": document_id, "tenant_id": tenant_id, "error": str(exc)}
             ) from exc
 
     @staticmethod
