@@ -228,6 +228,67 @@ class QdrantManager:
         except Exception as e:
             raise VectorStoreOperationError(operation="delete_by_document_id", details={"error": str(e)})
 
+    async def list_documents_by_tenant(self, *, tenant_id: str) -> list[dict]:
+        """
+        Builds document summaries from chunk payloads inside one tenant boundary.
+        """
+        query_filter = Filter(
+            must=[
+                FieldCondition(
+                    key="tenant_id",
+                    match=MatchValue(value=tenant_id),
+                )
+            ]
+        )
+
+        documents: dict[str, dict] = {}
+        offset = None
+
+        try:
+            while True:
+                points, offset = await self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=query_filter,
+                    limit=256,
+                    with_payload=True,
+                    with_vectors=False,
+                    offset=offset,
+                )
+
+                for point in points:
+                    payload = point.payload or {}
+                    document_id = payload.get("document_id")
+                    if not document_id:
+                        continue
+
+                    summary = documents.setdefault(
+                        document_id,
+                        {
+                            "document_id": document_id,
+                            "tenant_id": payload.get("tenant_id", tenant_id),
+                            "source_name": payload.get("source_name", ""),
+                            "chunk_count": 0,
+                            "created_at": payload.get("created_at", ""),
+                            "content_hash": payload.get("content_hash", ""),
+                        },
+                    )
+                    summary["chunk_count"] += 1
+
+                    created_at = payload.get("created_at", "")
+                    if created_at and (not summary["created_at"] or created_at < summary["created_at"]):
+                        summary["created_at"] = created_at
+
+                if offset is None:
+                    break
+
+            return sorted(
+                documents.values(),
+                key=lambda document: (document["created_at"], document["source_name"], document["document_id"]),
+                reverse=True,
+            )
+        except Exception as e:
+            raise VectorStoreOperationError(operation="list_documents_by_tenant", details={"error": str(e)})
+
     async def health_check(self) -> dict:
         """
         Checks connection and collection health.

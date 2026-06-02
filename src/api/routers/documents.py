@@ -2,11 +2,29 @@ from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 
 from src.rag.ingest import DocumentIngestService
 from src.rag.loaders import load_text_document
-from src.schemas.documents import DocumentDeleteResult, DocumentIngestRequest, DocumentIngestResult
+from src.schemas.documents import (
+    DocumentDeleteResult,
+    DocumentIngestRequest,
+    DocumentIngestResult,
+    DocumentListResult,
+)
 from src.schemas.response import SuccessResponse
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 document_ingest_service = DocumentIngestService()
+
+
+@router.get("", response_model=SuccessResponse[DocumentListResult])
+async def list_documents(
+    request: Request,
+    tenant_id: str = Query(..., min_length=1),
+    limit: int = Query(100, ge=1, le=500),
+):
+    result = await document_ingest_service.list_documents(
+        tenant_id=tenant_id,
+        limit=limit,
+    )
+    return SuccessResponse(data=result, request_id=request.state.request_id)
 
 
 @router.post("/ingest", response_model=SuccessResponse[DocumentIngestResult])

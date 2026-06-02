@@ -37,12 +37,34 @@ class FakeVectorStore:
         self.upserted_records = []
         self.search_calls = []
         self.deleted_documents = []
+        self.list_calls = []
 
     async def upsert_chunks(self, records: list[dict]) -> None:
         self.upserted_records = records
 
     async def delete_by_document_id(self, **kwargs) -> None:
         self.deleted_documents.append(kwargs)
+
+    async def list_documents_by_tenant(self, **kwargs) -> list[dict]:
+        self.list_calls.append(kwargs)
+        return [
+            {
+                "document_id": "doc-2",
+                "tenant_id": "default",
+                "source_name": "audit.md",
+                "chunk_count": 3,
+                "created_at": "2026-06-02T10:00:00+00:00",
+                "content_hash": "hash-2",
+            },
+            {
+                "document_id": "doc-1",
+                "tenant_id": "default",
+                "source_name": "policy.md",
+                "chunk_count": 2,
+                "created_at": "2026-06-01T10:00:00+00:00",
+                "content_hash": "hash-1",
+            },
+        ]
 
     async def query_hybrid(self, **kwargs):
         self.search_calls.append(kwargs)
@@ -194,6 +216,21 @@ def test_ingest_service_deletes_document_by_tenant_boundary() -> None:
     assert vector_store.deleted_documents == [{"document_id": "doc-1", "tenant_id": "default"}]
 
 
+def test_ingest_service_lists_documents_with_limit() -> None:
+    vector_store = FakeVectorStore()
+    service = DocumentIngestService(
+        vector_store=vector_store,
+        embedding_provider=FakeEmbeddingProvider(),
+        chunker=HeadingAwareChunker(max_chars=120, overlap_chars=10),
+    )
+
+    result = asyncio.run(service.list_documents(tenant_id="default", limit=1))
+
+    assert result["count"] == 1
+    assert result["documents"][0]["document_id"] == "doc-2"
+    assert vector_store.list_calls == [{"tenant_id": "default"}]
+
+
 def test_retriever_calls_hybrid_search_and_maps_results() -> None:
     vector_store = FakeVectorStore()
     retriever = HybridRetriever(
@@ -304,6 +341,37 @@ def test_ingest_endpoint_returns_ingest_result(monkeypatch) -> None:
     body = response.json()
     assert body["success"] is True
     assert body["data"] == {"document_id": "doc-1", "chunk_count": 2, "status": "ingested"}
+    assert body["request_id"]
+
+
+def test_list_documents_endpoint_returns_document_summaries(monkeypatch) -> None:
+    class FakeIngestService:
+        async def list_documents(self, **kwargs):
+            assert kwargs == {"tenant_id": "default", "limit": 10}
+            return {
+                "documents": [
+                    {
+                        "document_id": "doc-1",
+                        "tenant_id": "default",
+                        "source_name": "policy.md",
+                        "chunk_count": 2,
+                        "created_at": "2026-06-01T10:00:00+00:00",
+                        "content_hash": "hash-1",
+                    }
+                ],
+                "count": 1,
+            }
+
+    monkeypatch.setattr(documents_router, "document_ingest_service", FakeIngestService())
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.get("/documents", params={"tenant_id": "default", "limit": 10})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"]["count"] == 1
+    assert body["data"]["documents"][0]["document_id"] == "doc-1"
     assert body["request_id"]
 
 

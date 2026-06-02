@@ -7,6 +7,7 @@ from src.core.exceptions import (
     AppException,
     RagConfigurationError,
     RagDeleteError,
+    RagDocumentListError,
     RagIngestError,
     RagValidationError,
 )
@@ -115,6 +116,24 @@ class DocumentIngestService:
             raise RagIngestError(
                 details={"source_name": source_name, "tenant_id": tenant_id, "error": str(exc)}
             ) from exc
+
+    async def list_documents(self, *, tenant_id: str, limit: int = 100) -> dict:
+        if not tenant_id.strip():
+            raise RagValidationError("tenant_id must not be empty")
+        if limit < 1:
+            raise RagValidationError("limit must be greater than 0")
+
+        try:
+            documents = await self.vector_store.list_documents_by_tenant(tenant_id=tenant_id)
+            limited_documents = documents[:limit]
+            return {
+                "documents": limited_documents,
+                "count": len(limited_documents),
+            }
+        except AppException:
+            raise
+        except Exception as exc:
+            raise RagDocumentListError(details={"tenant_id": tenant_id, "error": str(exc)}) from exc
 
     async def delete_document(self, *, document_id: str, tenant_id: str) -> dict:
         if not document_id.strip():

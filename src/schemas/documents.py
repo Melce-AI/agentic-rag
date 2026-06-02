@@ -13,6 +13,20 @@ class DocumentIngestResult(BaseModel):
     status: str
 
 
+class DocumentSummary(BaseModel):
+    document_id: str
+    tenant_id: str
+    source_name: str
+    chunk_count: int
+    created_at: str
+    content_hash: str
+
+
+class DocumentListResult(BaseModel):
+    documents: list[DocumentSummary]
+    count: int
+
+
 class DocumentDeleteResult(BaseModel):
     document_id: str
     tenant_id: str

@@ -142,6 +142,16 @@ class RagDeleteError(RagError):
         )
 
 
+class RagDocumentListError(RagError):
+    def __init__(self, details: Optional[Any] = None):
+        super().__init__(
+            code="RAG_DOC_LIST_500",
+            message="Document listing failed",
+            status_code=500,
+            details=details,
+        )
+
+
 class RagRetrievalError(RagError):
     def __init__(self, details: Optional[Any] = None):
         super().__init__(
