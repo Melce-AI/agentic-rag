@@ -1,7 +1,7 @@
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 
 from src.rag.ingest import DocumentIngestService
-from src.rag.loaders import load_text_document
+from src.rag.loaders import load_document
 from src.schemas.documents import (
     DocumentDeleteResult,
     DocumentIngestRequest,
@@ -43,7 +43,7 @@ async def upload_document(
     tenant_id: str = Form(..., min_length=1),
     file: UploadFile = File(...),
 ):
-    loaded_document = load_text_document(
+    loaded_document = load_document(
         source_name=file.filename,
         raw_content=await file.read(),
     )
@@ -51,6 +51,7 @@ async def upload_document(
         source_name=loaded_document.source_name,
         content=loaded_document.content,
         tenant_id=tenant_id,
+        content_kind=loaded_document.content_kind,
     )
     return SuccessResponse(data=result, request_id=request.state.request_id)
 

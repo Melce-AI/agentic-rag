@@ -120,27 +120,40 @@ class QdrantManager:
     async def upsert_chunks(self, records: list[dict]):
         """
         Batch chunk insertion for hybrid dense+sparse search.
+
+        Points are sent in fixed-size batches so a large document (e.g. a
+        20k-row CSV that yields thousands of chunks) never exceeds Qdrant's
+        request size limit, which surfaces as an opaque request failure.
         """
-        try:
-            await self.client.upsert(
-                collection_name=self.collection_name,
-                points=[
-                    PointStruct(
-                        id=record["id"],
-                        vector={
-                            self.dense_vector_name: record["dense_vector"],
-                            self.sparse_vector_name: SparseVector(
-                                indices=record["sparse_indices"],
-                                values=record["sparse_values"]
-                            )
-                        },
-                        payload=record["payload"]
-                    )
-                    for record in records
-                ]
+        points = [
+            PointStruct(
+                id=record["id"],
+                vector={
+                    self.dense_vector_name: record["dense_vector"],
+                    self.sparse_vector_name: SparseVector(
+                        indices=record["sparse_indices"],
+                        values=record["sparse_values"],
+                    ),
+                },
+                payload=record["payload"],
             )
+            for record in records
+        ]
+
+        batch_size = max(1, settings.QDRANT_UPSERT_BATCH_SIZE)
+        try:
+            for start in range(0, len(points), batch_size):
+                await self.client.upsert(
+                    collection_name=self.collection_name,
+                    points=points[start : start + batch_size],
+                )
         except Exception as e:
-            raise VectorStoreOperationError(operation="upsert", details={"error": str(e)})
+            # Some Qdrant client errors stringify to "", so fall back to the type name.
+            message = str(e) or repr(e) or type(e).__name__
+            raise VectorStoreOperationError(
+                operation="upsert",
+                details={"error": message, "point_count": len(points), "batch_size": batch_size},
+            ) from e
 
     async def query_hybrid(
         self,

@@ -17,6 +17,7 @@ dependencies = [
     "watchdog>=6.0.0",
     "mcp[cli]>=1.27.2",
     "python-multipart>=0.0.20",
+    "pypdf>=5.1.0",
 ]
 
 [dependency-groups]

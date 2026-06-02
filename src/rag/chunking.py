@@ -1,9 +1,16 @@
+import csv
+import io
 import re
 from dataclasses import dataclass
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.rag.models import ChunkDraft
+
+
+def count_tokens(text: str) -> int:
+    """Lightweight, model-agnostic token estimate shared by all chunkers."""
+    return len(re.findall(r"\w+|[^\w\s]", text, flags=re.UNICODE))
 
 
 @dataclass(frozen=True)
@@ -140,4 +147,98 @@ class HeadingAwareChunker:
 
     @staticmethod
     def count_tokens(text: str) -> int:
-        return len(re.findall(r"\w+|[^\w\s]", text, flags=re.UNICODE))
+        return count_tokens(text)
+
+
+class TableChunker:
+    """Row-oriented chunker for tabular data (CSV, and later Excel/Parquet).
+
+    Heading-aware splitting is wrong for tables: it cuts records in half and
+    drops the column header from every chunk but the first. Instead this chunker
+    serializes each row as self-describing ``column: value`` pairs, prefixes each
+    chunk with the column schema, and packs whole rows up to the token budget so
+    a record is never split across chunks.
+    """
+
+    def __init__(self, max_tokens: int, rows_per_chunk: int | None = None) -> None:
+        if max_tokens < 20:
+            raise ValueError("max_tokens must be at least 20")
+        if rows_per_chunk is not None and rows_per_chunk < 1:
+            raise ValueError("rows_per_chunk must be at least 1 when provided")
+
+        self.max_tokens = max_tokens
+        self.rows_per_chunk = rows_per_chunk
+
+    def split(self, content: str) -> list[ChunkDraft]:
+        headers, rows = self._parse(content)
+        if not rows:
+            return []
+
+        schema_prefix = self._schema_prefix(headers)
+        prefix_tokens = count_tokens(schema_prefix) if schema_prefix else 0
+        budget = max(1, self.max_tokens - prefix_tokens)
+
+        chunks: list[ChunkDraft] = []
+        current: list[str] = []
+        current_tokens = 0
+
+        for row in rows:
+            record = self._serialize_row(headers, row)
+            if not record:
+                continue
+            record_tokens = count_tokens(record)
+
+            over_token_budget = current and current_tokens + record_tokens > budget
+            over_row_limit = (
+                self.rows_per_chunk is not None and len(current) >= self.rows_per_chunk
+            )
+            if over_token_budget or over_row_limit:
+                chunks.append(self._emit(schema_prefix, current, len(chunks)))
+                current = []
+                current_tokens = 0
+
+            current.append(record)
+            current_tokens += record_tokens
+
+        if current:
+            chunks.append(self._emit(schema_prefix, current, len(chunks)))
+
+        return chunks
+
+    @staticmethod
+    def _parse(content: str) -> tuple[list[str], list[list[str]]]:
+        reader = csv.reader(io.StringIO(content))
+        all_rows = [row for row in reader if any(cell.strip() for cell in row)]
+        if not all_rows:
+            return [], []
+
+        headers = [cell.strip() for cell in all_rows[0]]
+        return headers, all_rows[1:]
+
+    @staticmethod
+    def _serialize_row(headers: list[str], row: list[str]) -> str:
+        pairs: list[str] = []
+        for index, value in enumerate(row):
+            cleaned = value.strip()
+            if not cleaned:
+                continue
+            column = headers[index] if index < len(headers) else f"column_{index + 1}"
+            pairs.append(f"{column}: {cleaned}")
+        return " | ".join(pairs)
+
+    @staticmethod
+    def _schema_prefix(headers: list[str]) -> str:
+        named = [header for header in headers if header]
+        return f"columns: {', '.join(named)}" if named else ""
+
+    def _emit(self, schema_prefix: str, records: list[str], chunk_index: int) -> ChunkDraft:
+        body = "\n".join(records)
+        text = f"{schema_prefix}\n{body}" if schema_prefix else body
+        return ChunkDraft(
+            text=text,
+            heading_path=[],
+            chunk_index=chunk_index,
+            chunk_token_count=count_tokens(text),
+            section_title=None,
+            section_index=0,
+        )

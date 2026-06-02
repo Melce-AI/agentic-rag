@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     QDRANT_API_KEY: Optional[SecretStr] = None
     QDRANT_COLLECTION_NAME: str = "company_documents"
     QDRANT_VECTOR_SIZE: int = 384
+    # Upsert points in batches so a large document (e.g. a 20k-row CSV that
+    # produces thousands of chunks) never exceeds Qdrant's request size limit.
+    QDRANT_UPSERT_BATCH_SIZE: int = 128
 
     # Advanced RAG Settings
     RAG_DENSE_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"

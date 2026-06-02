@@ -11,9 +11,9 @@ from src.core.exceptions import (
     RagIngestError,
     RagValidationError,
 )
-from src.rag.chunking import HeadingAwareChunker
+from src.rag.chunking import HeadingAwareChunker, TableChunker
 from src.rag.embeddings import EmbeddingProvider, FastEmbedProvider
-from src.rag.models import Chunk, Document
+from src.rag.models import Chunk, ContentKind, Document
 from src.storage.qdrant_client import QdrantManager, qdrant_manager
 
 
@@ -32,6 +32,7 @@ class DocumentIngestService:
                 max_tokens=settings.RAG_CHUNK_MAX_TOKENS,
                 overlap_tokens=settings.RAG_CHUNK_OVERLAP_TOKENS,
             )
+            self.table_chunker = TableChunker(max_tokens=settings.RAG_CHUNK_MAX_TOKENS)
         except ValueError as exc:
             raise RagConfigurationError(
                 "Invalid RAG chunking configuration",
@@ -42,12 +43,19 @@ class DocumentIngestService:
                 },
             ) from exc
 
+    def _chunker_for(self, content_kind: ContentKind):
+        """Picks the chunking strategy required by the loaded content."""
+        if content_kind is ContentKind.TABULAR:
+            return self.table_chunker
+        return self.chunker
+
     async def ingest_document(
         self,
         *,
         source_name: str,
         content: str,
         tenant_id: str,
+        content_kind: ContentKind = ContentKind.TEXT,
     ) -> dict:
         if not source_name.strip():
             raise RagValidationError("source_name must not be empty")
@@ -55,7 +63,7 @@ class DocumentIngestService:
             raise RagValidationError("content must not be empty")
 
         try:
-            chunks = self.chunker.split(content)
+            chunks = self._chunker_for(content_kind).split(content)
             if not chunks:
                 raise RagValidationError("document did not produce any chunks")
 
