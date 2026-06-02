@@ -26,6 +26,42 @@ class DocumentParseError(AppException):
         )
 
 
+class DocumentOperationError(AppException):
+    def __init__(
+        self,
+        message: str,
+        code: str = "DOC_00",
+        status_code: int = 500,
+        details: Optional[Any] = None,
+    ):
+        super().__init__(
+            code=code,
+            message=message,
+            status_code=status_code,
+            details=details,
+        )
+
+
+class DocumentListError(DocumentOperationError):
+    def __init__(self, details: Optional[Any] = None):
+        super().__init__(
+            code="DOC_LIST_500",
+            message="Document listing failed",
+            status_code=500,
+            details=details,
+        )
+
+
+class DocumentDeleteError(DocumentOperationError):
+    def __init__(self, details: Optional[Any] = None):
+        super().__init__(
+            code="DOC_DELETE_500",
+            message="Document deletion failed",
+            status_code=500,
+            details=details,
+        )
+
+
 class DatabaseConnectionError(AppException):
     def __init__(self, details: Optional[Any] = None):
         super().__init__(
@@ -127,26 +163,6 @@ class RagIngestError(RagError):
         super().__init__(
             code="RAG_INGEST_500",
             message="Document ingest failed",
-            status_code=500,
-            details=details,
-        )
-
-
-class RagDeleteError(RagError):
-    def __init__(self, details: Optional[Any] = None):
-        super().__init__(
-            code="RAG_DELETE_500",
-            message="Document deletion failed",
-            status_code=500,
-            details=details,
-        )
-
-
-class RagDocumentListError(RagError):
-    def __init__(self, details: Optional[Any] = None):
-        super().__init__(
-            code="RAG_DOC_LIST_500",
-            message="Document listing failed",
             status_code=500,
             details=details,
         )

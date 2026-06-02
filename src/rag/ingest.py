@@ -5,9 +5,9 @@ import uuid
 from src.core.config import get_settings
 from src.core.exceptions import (
     AppException,
+    DocumentDeleteError,
+    DocumentListError,
     RagConfigurationError,
-    RagDeleteError,
-    RagDocumentListError,
     RagIngestError,
     RagValidationError,
 )
@@ -133,7 +133,7 @@ class DocumentIngestService:
         except AppException:
             raise
         except Exception as exc:
-            raise RagDocumentListError(details={"tenant_id": tenant_id, "error": str(exc)}) from exc
+            raise DocumentListError(details={"tenant_id": tenant_id, "error": str(exc)}) from exc
 
     async def delete_document(self, *, document_id: str, tenant_id: str) -> dict:
         if not document_id.strip():
@@ -154,7 +154,7 @@ class DocumentIngestService:
         except AppException:
             raise
         except Exception as exc:
-            raise RagDeleteError(
+            raise DocumentDeleteError(
                 details={"document_id": document_id, "tenant_id": tenant_id, "error": str(exc)}
             ) from exc
 
