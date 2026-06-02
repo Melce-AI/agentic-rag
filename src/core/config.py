@@ -8,42 +8,42 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # General Application Settings
-    PROJECT_NAME: str = "Agentic RAG API"
-    VERSION: str = "1.0.0"
-    ENVIRONMENT: str = "dev"
-    LOG_LEVEL: str = "INFO"
+    project_name: str = "Agentic RAG API"
+    version: str = "1.0.0"
+    environment: str = "dev"
+    log_level: str = "INFO"
 
     # LLM and Tracing Settings
-    OPENAI_API_KEY: Optional[SecretStr] = None
-    LANGCHAIN_API_KEY: Optional[SecretStr] = None
-    LANGCHAIN_TRACING_V2: bool = True
-    LANGCHAIN_PROJECT: str = "AGENTIC-RAG"
+    openai_api_key: Optional[SecretStr] = None
+    langchain_api_key: Optional[SecretStr] = None
+    langchain_tracing_v2: bool = True
+    langchain_project: str = "AGENTIC-RAG"
 
     # Core API Server Settings
-    CORE_API_PORT: int = 8089
+    core_api_port: int = 8089
 
     # Vector Database (Qdrant) Settings
-    QDRANT_HOST: str = "qdrant-db"
-    QDRANT_PORT: int = 6333
-    QDRANT_GRPC_PORT: int = 6334
-    QDRANT_API_KEY: Optional[SecretStr] = None
-    QDRANT_COLLECTION_NAME: str = "company_documents"
-    QDRANT_VECTOR_SIZE: int = 384
+    qdrant_host: str = "qdrant-db"
+    qdrant_port: int = 6333
+    qdrant_grpc_port: int = 6334
+    qdrant_api_key: Optional[SecretStr] = None
+    qdrant_collection_name: str = "company_documents"
+    qdrant_vector_size: int = 384
     # Upsert points in batches so a large document (e.g. a 20k-row CSV that
     # produces thousands of chunks) never exceeds Qdrant's request size limit.
-    QDRANT_UPSERT_BATCH_SIZE: int = 128
+    qdrant_upsert_batch_size: int = 128
 
     # Advanced RAG Settings
-    RAG_DENSE_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    RAG_SPARSE_MODEL: str = "Qdrant/bm25"
-    RAG_CHUNK_MAX_TOKENS: int = 350
-    RAG_CHUNK_OVERLAP_TOKENS: int = 50
-    RAG_RETRIEVAL_CANDIDATES: int = 20
-    RAG_TOP_K: int = 5
+    rag_dense_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    rag_sparse_model: str = "Qdrant/bm25"
+    rag_chunk_max_tokens: int = 350
+    rag_chunk_overlap_tokens: int = 50
+    rag_retrieval_candidates: int = 20
+    rag_top_k: int = 5
 
     # Reranking: a cross-encoder re-scores the candidates before top_k is cut.
-    RAG_RERANK_ENABLED: bool = True
-    RAG_RERANK_MODEL: str = "BAAI/bge-reranker-base"
+    rag_rerank_enabled: bool = True
+    rag_rerank_model: str = "BAAI/bge-reranker-base"
 
     # Environment Variables (.env) Reading Rules
     model_config = SettingsConfigDict(

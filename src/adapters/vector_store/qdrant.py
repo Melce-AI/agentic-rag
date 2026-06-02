@@ -22,13 +22,13 @@ class QdrantManager:
 
     def __init__(self):
         self.client = AsyncQdrantClient(
-            host=settings.QDRANT_HOST,
-            port=settings.QDRANT_PORT,
-            api_key=settings.QDRANT_API_KEY,
-            grpc_port=settings.QDRANT_GRPC_PORT,
+            host=settings.qdrant_host,
+            port=settings.qdrant_port,
+            api_key=settings.qdrant_api_key,
+            grpc_port=settings.qdrant_grpc_port,
             prefer_grpc=False
         )
-        self.collection_name = settings.QDRANT_COLLECTION_NAME
+        self.collection_name = settings.qdrant_collection_name
         self.dense_vector_name = "dense-text"
         self.sparse_vector_name = "sparse-text"
 
@@ -46,7 +46,7 @@ class QdrantManager:
                     collection_name=self.collection_name,
                     vectors_config={
                         self.dense_vector_name: VectorParams(
-                            size=settings.QDRANT_VECTOR_SIZE,
+                            size=settings.qdrant_vector_size,
                             distance=Distance.COSINE,
                         )
                     },
@@ -65,8 +65,8 @@ class QdrantManager:
                     raise ValueError(f"Missing dense vector config for '{self.dense_vector_name}'")
                 
                 dense_cfg = params.vectors[self.dense_vector_name]
-                if dense_cfg.size != settings.QDRANT_VECTOR_SIZE:
-                    raise ValueError(f"Vector size mismatch: expected {settings.QDRANT_VECTOR_SIZE}, got {dense_cfg.size}")
+                if dense_cfg.size != settings.qdrant_vector_size:
+                    raise ValueError(f"Vector size mismatch: expected {settings.qdrant_vector_size}, got {dense_cfg.size}")
 
                 if not params.sparse_vectors or self.sparse_vector_name not in params.sparse_vectors:
                     raise ValueError(f"Missing sparse vector config for '{self.sparse_vector_name}'")
@@ -140,7 +140,7 @@ class QdrantManager:
             for record in records
         ]
 
-        batch_size = max(1, settings.QDRANT_UPSERT_BATCH_SIZE)
+        batch_size = max(1, settings.qdrant_upsert_batch_size)
         try:
             for start in range(0, len(points), batch_size):
                 await self.client.upsert(

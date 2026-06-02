@@ -111,8 +111,8 @@ def setup_logging() -> None:
     """Initialize logging with dynamic terminal levels and persistent file logging.
     
     Features:
-    - Terminal handler levels controlled by Settings.LOG_LEVEL (dynamic).
-    - File log handler follows LOG_LEVEL dynamically. Useful for checking what your LOG_LEVEL actually captures.
+    - Terminal handler levels controlled by Settings.log_level (dynamic).
+    - File log handler follows log_level dynamically. Useful for checking what your LOG_LEVEL actually captures.
     - File JSON handler always logs at DEBUG for full traceability (persistent).
     - Hierarchical loggers: src.api, src.core, src.adapters, src.rag etc. can be configured independently.
     - Non-blocking I/O via QueueHandler + QueueListener.
@@ -129,7 +129,7 @@ def setup_logging() -> None:
         config = json.load(f_in)
 
     settings = get_settings()
-    terminal_level = _resolve_log_level(settings.LOG_LEVEL)
+    terminal_level = _resolve_log_level(settings.log_level)
 
     stdout_handler = config.get("handlers", {}).get("stdout", {})
     stderr_handler = config.get("handlers", {}).get("stderr", {})

@@ -22,7 +22,7 @@ class HybridRetriever:
         # Explicit reranker wins; otherwise use the configured one unless disabled.
         if reranker is not None:
             self.reranker: Reranker | None = reranker
-        elif self.settings.RAG_RERANK_ENABLED:
+        elif self.settings.rag_rerank_enabled:
             self.reranker = FastEmbedReranker()
         else:
             self.reranker = None
@@ -38,14 +38,14 @@ class HybridRetriever:
             raise RagValidationError("query must not be empty")
 
         try:
-            limit = top_k or self.settings.RAG_TOP_K
+            limit = top_k or self.settings.rag_top_k
             embedding = self.embedding_provider.embed_query(query)
             raw_results = await self.vector_store.query_hybrid(
                 dense_vector=embedding.dense,
                 sparse_indices=embedding.sparse.indices,
                 sparse_values=embedding.sparse.values,
                 tenant_id=tenant_id,
-                limit=self.settings.RAG_RETRIEVAL_CANDIDATES,
+                limit=self.settings.rag_retrieval_candidates,
             )
             candidates = [self._map_result(result) for result in raw_results]
             ranked = self._rerank(query, candidates)

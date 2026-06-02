@@ -31,7 +31,7 @@ class FastEmbedReranker:
 
     def __init__(self, model_name: str | None = None) -> None:
         settings = get_settings()
-        self.model_name = model_name or settings.RAG_RERANK_MODEL
+        self.model_name = model_name or settings.rag_rerank_model
         self._model = None
 
     def rerank(self, query: str, documents: list[str]) -> list[float]:

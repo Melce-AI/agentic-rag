@@ -29,16 +29,16 @@ class DocumentIngestService:
         self.embedding_provider = embedding_provider or FastEmbedProvider()
         try:
             self.chunker = chunker or HeadingAwareChunker(
-                max_tokens=settings.RAG_CHUNK_MAX_TOKENS,
-                overlap_tokens=settings.RAG_CHUNK_OVERLAP_TOKENS,
+                max_tokens=settings.rag_chunk_max_tokens,
+                overlap_tokens=settings.rag_chunk_overlap_tokens,
             )
-            self.table_chunker = TableChunker(max_tokens=settings.RAG_CHUNK_MAX_TOKENS)
+            self.table_chunker = TableChunker(max_tokens=settings.rag_chunk_max_tokens)
         except ValueError as exc:
             raise RagConfigurationError(
                 "Invalid RAG chunking configuration",
                 details={
-                    "max_tokens": settings.RAG_CHUNK_MAX_TOKENS,
-                    "overlap_tokens": settings.RAG_CHUNK_OVERLAP_TOKENS,
+                    "max_tokens": settings.rag_chunk_max_tokens,
+                    "overlap_tokens": settings.rag_chunk_overlap_tokens,
                     "error": str(exc),
                 },
             ) from exc

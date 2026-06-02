@@ -32,8 +32,8 @@ class FastEmbedProvider:
         sparse_model_name: str | None = None,
     ) -> None:
         settings = get_settings()
-        self.dense_model_name = dense_model_name or settings.RAG_DENSE_MODEL
-        self.sparse_model_name = sparse_model_name or settings.RAG_SPARSE_MODEL
+        self.dense_model_name = dense_model_name or settings.rag_dense_model
+        self.sparse_model_name = sparse_model_name or settings.rag_sparse_model
         self._dense_model = None
         self._sparse_model = None
 
