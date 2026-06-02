@@ -7,6 +7,8 @@ include:
   - path: infra/qdrant-db/docker-compose.yml
   # Frontend
   - path: infra/frontend/docker-compose.yml
+  # Phoenix AI observability
+  - path: infra/phoenix/docker-compose.yml
 
 networks:
   agentic-rag-network:

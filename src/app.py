@@ -5,6 +5,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 
+from opentelemetry import trace
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
 from src.core.exception_handlers import (
     app_exception_handler,
     http_exception_handler,
@@ -14,10 +17,12 @@ from src.core.exception_handlers import (
 from src.core.exceptions import AppException
 from src.adapters.vector_store.qdrant import qdrant_manager
 from src.observability.logging import setup_logging
+from src.observability.tracing import setup_tracing
 
 
 logger = logging.getLogger(__name__)
 setup_logging()
+setup_tracing()
 
 
 @asynccontextmanager
@@ -27,6 +32,9 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Application is shutting down.")
     await qdrant_manager.close()
+    provider = trace.get_tracer_provider()
+    if hasattr(provider, "shutdown"):
+        provider.shutdown()
 
 
 app = FastAPI(
@@ -73,6 +81,8 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(documents_router)
 app.include_router(search_router)
+
+FastAPIInstrumentor.instrument_app(app)
 
 
 @app.get("/health", tags=["Health"])

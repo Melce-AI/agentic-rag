@@ -1,0 +1,22 @@
+services:
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: agentic_rag_phoenix
+    ports:
+      - "6006:6006"   # Phoenix UI + OTLP HTTP receiver
+      - "4317:4317"   # OTLP gRPC receiver
+    volumes:
+      - phoenix-data:/mnt/data
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    restart: unless-stopped
+    networks:
+      - agentic-rag-network
+
+networks:
+  agentic-rag-network:
+    name: agentic-rag-network
+
+volumes:
+  phoenix-data:
+    name: agentic-rag-phoenix-data

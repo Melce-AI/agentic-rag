@@ -18,6 +18,10 @@ dependencies = [
     "mcp[cli]>=1.27.2",
     "python-multipart>=0.0.20",
     "pypdf>=5.1.0",
+    "opentelemetry-sdk>=1.28.0",
+    "opentelemetry-instrumentation-fastapi>=0.49b0",
+    "opentelemetry-exporter-otlp-proto-http>=1.28.0",
+    "openinference-semantic-conventions>=0.1.12",
 ]
 
 [dependency-groups]

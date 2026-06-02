@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     langchain_tracing_v2: bool = True
     langchain_project: str = "AGENTIC-RAG"
 
+    # OpenTelemetry Settings
+    otel_enabled: bool = True
+    otel_service_name: str = "agentic-rag"
+    otel_exporter_otlp_endpoint: str = "http://localhost:6006"
+
     # Core API Server Settings
     core_api_port: int = 8089
 
