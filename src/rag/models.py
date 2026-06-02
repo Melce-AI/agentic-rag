@@ -24,6 +24,9 @@ class Chunk:
     text: str
     heading_path: list[str]
     chunk_index: int
+    chunk_token_count: int
+    section_title: str | None
+    section_index: int
     source_name: str
     created_at: str
     content_hash: str
@@ -34,6 +37,9 @@ class ChunkDraft:
     text: str
     heading_path: list[str]
     chunk_index: int
+    chunk_token_count: int
+    section_title: str | None
+    section_index: int
 
 
 @dataclass(frozen=True)

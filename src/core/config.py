@@ -33,8 +33,8 @@ class Settings(BaseSettings):
     # Advanced RAG Settings
     RAG_DENSE_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     RAG_SPARSE_MODEL: str = "Qdrant/bm25"
-    RAG_CHUNK_MAX_CHARS: int = 1200
-    RAG_CHUNK_OVERLAP_CHARS: int = 150
+    RAG_CHUNK_MAX_TOKENS: int = 350
+    RAG_CHUNK_OVERLAP_TOKENS: int = 50
     RAG_RETRIEVAL_CANDIDATES: int = 20
     RAG_TOP_K: int = 5
 

@@ -1,4 +1,7 @@
+import re
 from dataclasses import dataclass
+
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.rag.models import ChunkDraft
 
@@ -7,17 +10,22 @@ from src.rag.models import ChunkDraft
 class _SectionBlock:
     text: str
     heading_path: list[str]
+    section_index: int
+
+    @property
+    def section_title(self) -> str | None:
+        return self.heading_path[-1] if self.heading_path else None
 
 
 class HeadingAwareChunker:
-    def __init__(self, max_chars: int, overlap_chars: int) -> None:
-        if max_chars < 100:
-            raise ValueError("max_chars must be at least 100")
-        if overlap_chars < 0 or overlap_chars >= max_chars:
-            raise ValueError("overlap_chars must be non-negative and smaller than max_chars")
+    def __init__(self, max_tokens: int, overlap_tokens: int) -> None:
+        if max_tokens < 20:
+            raise ValueError("max_tokens must be at least 20")
+        if overlap_tokens < 0 or overlap_tokens >= max_tokens:
+            raise ValueError("overlap_tokens must be non-negative and smaller than max_tokens")
 
-        self.max_chars = max_chars
-        self.overlap_chars = overlap_chars
+        self.max_tokens = max_tokens
+        self.overlap_tokens = overlap_tokens
 
     def split(self, content: str) -> list[ChunkDraft]:
         normalized = content.strip()
@@ -26,12 +34,15 @@ class HeadingAwareChunker:
 
         chunks: list[ChunkDraft] = []
         for block in self._section_blocks(normalized):
-            for text in self._split_text(block.text):
+            for text in self._split_text(block):
                 chunks.append(
                     ChunkDraft(
                         text=text,
                         heading_path=block.heading_path,
                         chunk_index=len(chunks),
+                        chunk_token_count=self.count_tokens(text),
+                        section_title=block.section_title,
+                        section_index=block.section_index,
                     )
                 )
 
@@ -42,6 +53,7 @@ class HeadingAwareChunker:
         current_lines: list[str] = []
         heading_stack: list[str] = []
         current_path: list[str] = []
+        section_index = 0
 
         for raw_line in content.splitlines():
             line = raw_line.rstrip()
@@ -53,28 +65,30 @@ class HeadingAwareChunker:
                         _SectionBlock(
                             text="\n".join(current_lines).strip(),
                             heading_path=current_path.copy(),
+                            section_index=section_index,
                         )
                     )
                     current_lines = []
+                    section_index += 1
 
                 level, title = heading
                 heading_stack = heading_stack[: level - 1]
                 heading_stack.append(title)
                 current_path = heading_stack.copy()
-                current_lines.append(title)
                 continue
 
             current_lines.append(line)
 
-        if current_lines:
+        if current_lines or current_path:
             blocks.append(
                 _SectionBlock(
                     text="\n".join(current_lines).strip(),
                     heading_path=current_path.copy(),
+                    section_index=section_index,
                 )
             )
 
-        return [block for block in blocks if block.text]
+        return [block for block in blocks if block.text or block.heading_path]
 
     @staticmethod
     def _parse_markdown_heading(line: str) -> tuple[int, str] | None:
@@ -91,43 +105,39 @@ class HeadingAwareChunker:
         title = stripped[len(marker) :].strip()
         return (len(marker), title) if title else None
 
-# TODO - chunk max_chars a göre değil de token aware chunking e geçilmeli.
-    def _split_text(self, text: str) -> list[str]:
-        if len(text) <= self.max_chars:
-            return [text]
+    def _split_text(self, block: _SectionBlock) -> list[str]:
+        prefix = self._heading_prefix(block.heading_path)
+        prefix_tokens = self.count_tokens(prefix)
+        body = block.text.strip()
 
-        chunks: list[str] = []
-        start = 0
-        while start < len(text):
-            end = min(start + self.max_chars, len(text))
-            if end < len(text):
-                boundary = self._find_boundary(text, start, end)
-                if boundary > start:
-                    end = boundary
+        if not body:
+            return [prefix] if prefix else []
 
-            chunk = text[start:end].strip()
-            if chunk:
-                chunks.append(chunk)
+        budget = max(1, self.max_tokens - prefix_tokens)
+        overlap = min(self.overlap_tokens, max(0, budget - 1))
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=budget,
+            chunk_overlap=overlap,
+            length_function=self.count_tokens,
+            separators=["\n\n", "\n", ". ", "? ", "! ", "; ", ", ", " ", ""],
+            keep_separator=False,
+        )
 
-            if end >= len(text):
-                break
-
-            start = max(end - self.overlap_chars, start + 1)
-
-        return chunks
+        pieces = [piece.strip() for piece in splitter.split_text(body) if piece.strip()]
+        return [self._with_heading_prefix(prefix, piece) for piece in pieces]
 
     @staticmethod
-    def _find_boundary(text: str, start: int, end: int) -> int:
-        paragraph = text.rfind("\n\n", start, end)
-        if paragraph > start:
-            return paragraph
+    def _heading_prefix(heading_path: list[str]) -> str:
+        return " > ".join(heading_path).strip()
 
-        newline = text.rfind("\n", start, end)
-        if newline > start:
-            return newline
+    @staticmethod
+    def _with_heading_prefix(prefix: str, text: str) -> str:
+        if not prefix:
+            return text
+        if text.startswith(prefix):
+            return text
+        return f"{prefix}\n\n{text}"
 
-        space = text.rfind(" ", start, end)
-        if space > start:
-            return space
-
-        return end
+    @staticmethod
+    def count_tokens(text: str) -> int:
+        return len(re.findall(r"\w+|[^\w\s]", text, flags=re.UNICODE))

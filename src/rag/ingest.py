@@ -29,15 +29,15 @@ class DocumentIngestService:
         self.embedding_provider = embedding_provider or FastEmbedProvider()
         try:
             self.chunker = chunker or HeadingAwareChunker(
-                max_chars=settings.RAG_CHUNK_MAX_CHARS,
-                overlap_chars=settings.RAG_CHUNK_OVERLAP_CHARS,
+                max_tokens=settings.RAG_CHUNK_MAX_TOKENS,
+                overlap_tokens=settings.RAG_CHUNK_OVERLAP_TOKENS,
             )
         except ValueError as exc:
             raise RagConfigurationError(
                 "Invalid RAG chunking configuration",
                 details={
-                    "max_chars": settings.RAG_CHUNK_MAX_CHARS,
-                    "overlap_chars": settings.RAG_CHUNK_OVERLAP_CHARS,
+                    "max_tokens": settings.RAG_CHUNK_MAX_TOKENS,
+                    "overlap_tokens": settings.RAG_CHUNK_OVERLAP_TOKENS,
                     "error": str(exc),
                 },
             ) from exc
@@ -80,6 +80,9 @@ class DocumentIngestService:
                     text=chunk.text,
                     heading_path=chunk.heading_path,
                     chunk_index=chunk.chunk_index,
+                    chunk_token_count=chunk.chunk_token_count,
+                    section_title=chunk.section_title,
+                    section_index=chunk.section_index,
                     source_name=document.source_name,
                     created_at=created_at,
                     content_hash=document.content_hash,
@@ -97,6 +100,9 @@ class DocumentIngestService:
                             "source_name": stored_chunk.source_name,
                             "heading_path": stored_chunk.heading_path,
                             "chunk_index": stored_chunk.chunk_index,
+                            "chunk_token_count": stored_chunk.chunk_token_count,
+                            "section_title": stored_chunk.section_title,
+                            "section_index": stored_chunk.section_index,
                             "text": stored_chunk.text,
                             "created_at": stored_chunk.created_at,
                             "content_hash": stored_chunk.content_hash,

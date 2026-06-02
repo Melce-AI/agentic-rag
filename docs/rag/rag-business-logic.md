@@ -108,9 +108,11 @@ Strateji:
 3. Heading stack tutulur.
 4. Her chunk’a `heading_path` yazılır.
 5. Başlık metni chunk text içine dahil edilir.
-6. Uzun section’lar `max_chars` sınırına göre bölünür.
-7. Bölme sırasında önce paragraf, sonra satır, sonra boşluk sınırı tercih edilir.
-8. Overlap uygulanır.
+5. Heading context is included in chunk text so retrieved chunks stand alone.
+6. Long sections are split by token budget, not character count.
+7. Recursive splitting prefers paragraph, line, sentence-like separators, punctuation, spaces, then a final fallback.
+8. Token overlap is applied.
+9. Each chunk receives section metadata for citations and future section expansion.
 
 Örnek:
 
@@ -149,14 +151,14 @@ ChunkDraft(
 
 Business açısından `heading_path` çok önemli. Çünkü search sonucu döndüğümüzde sadece text değil, “bu parça dokümanın hangi bölümünden geldi?” bilgisini de veririz. Bu citation/trace için temel.
 
-Şu an chunk size config char bazlı:
+Chunk size config is token-based:
 
 ```python
-RAG_CHUNK_MAX_CHARS = 1200
-RAG_CHUNK_OVERLAP_CHARS = 150
+RAG_CHUNK_MAX_TOKENS = 350
+RAG_CHUNK_OVERLAP_TOKENS = 50
 ```
 
-Token bazlı değil. İlk foundation için basit ve deterministik. Sonraki adımda token-aware chunking’e geçilebilir.
+The old character-based settings were removed directly. Semantic and LLM-based chunking are intentionally left out of this foundation step.
 
 ## **4. Stable ID Mantığı**
 `ingest.py` içinde deterministic ID üretiyoruz.

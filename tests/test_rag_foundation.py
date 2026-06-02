@@ -124,26 +124,44 @@ def test_fastembed_provider_rejects_blank_document_text_before_model_load() -> N
 
 
 def test_heading_aware_chunking_preserves_heading_path() -> None:
-    chunker = HeadingAwareChunker(max_chars=120, overlap_chars=10)
+    chunker = HeadingAwareChunker(max_tokens=60, overlap_tokens=5)
 
-    chunks = chunker.split("# Policy\nIntro\n## Access\nUsers need MFA.\n## Audit\nLogs stay on.")
+    chunks = chunker.split(
+        "# Policy\nIntro\n## Access\nUsers need MFA.\n### Exceptions\nBreak glass only.\n## Audit\nLogs stay on."
+    )
 
     assert [chunk.heading_path for chunk in chunks] == [
         ["Policy"],
         ["Policy", "Access"],
+        ["Policy", "Access", "Exceptions"],
         ["Policy", "Audit"],
     ]
-    assert chunks[1].text.startswith("Access")
+    assert chunks[1].text.startswith("Policy > Access")
+    assert chunks[2].section_title == "Exceptions"
+    assert [chunk.section_index for chunk in chunks] == list(range(len(chunks)))
 
 
 def test_plain_text_chunks_predictably_without_headings() -> None:
-    chunker = HeadingAwareChunker(max_chars=100, overlap_chars=10)
+    chunker = HeadingAwareChunker(max_tokens=20, overlap_tokens=5)
 
     chunks = chunker.split(("alpha " * 40).strip())
 
     assert len(chunks) > 1
     assert all(chunk.heading_path == [] for chunk in chunks)
+    assert all(chunk.section_title is None for chunk in chunks)
     assert [chunk.chunk_index for chunk in chunks] == list(range(len(chunks)))
+    assert all(chunk.chunk_token_count <= 20 for chunk in chunks)
+
+
+def test_heading_aware_chunking_respects_token_budget_with_heading_context() -> None:
+    chunker = HeadingAwareChunker(max_tokens=25, overlap_tokens=5)
+
+    chunks = chunker.split("# Policy\n## Access\n" + ("alpha beta gamma delta epsilon. " * 12))
+
+    assert len(chunks) > 1
+    assert all(chunk.heading_path == ["Policy", "Access"] for chunk in chunks)
+    assert all(chunk.text.startswith("Policy > Access") for chunk in chunks)
+    assert all(chunk.chunk_token_count <= 25 for chunk in chunks)
 
 
 def test_ingest_service_creates_stable_ids_and_upserts_chunks() -> None:
@@ -151,7 +169,7 @@ def test_ingest_service_creates_stable_ids_and_upserts_chunks() -> None:
     service = DocumentIngestService(
         vector_store=vector_store,
         embedding_provider=FakeEmbeddingProvider(),
-        chunker=HeadingAwareChunker(max_chars=120, overlap_chars=10),
+        chunker=HeadingAwareChunker(max_tokens=60, overlap_tokens=5),
     )
 
     first = asyncio.run(
@@ -174,6 +192,9 @@ def test_ingest_service_creates_stable_ids_and_upserts_chunks() -> None:
     record = vector_store.upserted_records[0]
     assert record["id"] == record["payload"]["chunk_id"]
     assert record["payload"]["heading_path"] == ["Policy"]
+    assert record["payload"]["section_title"] == "Policy"
+    assert record["payload"]["section_index"] == 0
+    assert record["payload"]["chunk_token_count"] > 0
     assert record["payload"]["source_name"] == "policy.md"
     assert record["payload"]["content_hash"]
     assert record["dense_vector"] == [0.0, 0.1, 0.2]
@@ -184,7 +205,7 @@ def test_ingest_service_wraps_unexpected_errors() -> None:
     service = DocumentIngestService(
         vector_store=FakeVectorStore(),
         embedding_provider=FailingEmbeddingProvider(),
-        chunker=HeadingAwareChunker(max_chars=120, overlap_chars=10),
+        chunker=HeadingAwareChunker(max_tokens=60, overlap_tokens=5),
     )
 
     try:
@@ -207,7 +228,7 @@ def test_ingest_service_deletes_document_by_tenant_boundary() -> None:
     service = DocumentIngestService(
         vector_store=vector_store,
         embedding_provider=FakeEmbeddingProvider(),
-        chunker=HeadingAwareChunker(max_chars=120, overlap_chars=10),
+        chunker=HeadingAwareChunker(max_tokens=60, overlap_tokens=5),
     )
 
     result = asyncio.run(service.delete_document(document_id="doc-1", tenant_id="default"))
@@ -221,7 +242,7 @@ def test_ingest_service_lists_documents_with_limit() -> None:
     service = DocumentIngestService(
         vector_store=vector_store,
         embedding_provider=FakeEmbeddingProvider(),
-        chunker=HeadingAwareChunker(max_chars=120, overlap_chars=10),
+        chunker=HeadingAwareChunker(max_tokens=60, overlap_tokens=5),
     )
 
     result = asyncio.run(service.list_documents(tenant_id="default", limit=1))
