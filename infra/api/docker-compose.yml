@@ -17,10 +17,14 @@ services:
     volumes:
       - ../../src:/app/src:ro
       - ../../logs:/app/logs:rw
+      - hf-cache:/app/.cache/huggingface
     environment:
       UV_COMPILE_BYTECODE: "1"
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
+      HF_HOME: "/app/.cache/huggingface"
+      HF_HUB_CACHE: "/app/.cache/huggingface/hub"
+      FASTEMBED_CACHE_PATH: "/app/.cache/huggingface/fastembed"
     # Minimal hardening that stays low-friction for development.
     security_opt:
       - no-new-privileges:true
@@ -39,3 +43,7 @@ services:
 networks:
   agentic-rag-network:
     name: agentic-rag-network
+
+volumes:
+  hf-cache:
+    name: agentic-rag-hf-cache

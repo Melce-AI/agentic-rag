@@ -13,5 +13,7 @@ networks:
     name: agentic-rag-network
 
 volumes:
+  hf-cache:
+    name: agentic-rag-hf-cache
   qdrant_data:
     external: true

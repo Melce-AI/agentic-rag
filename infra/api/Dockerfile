@@ -38,6 +38,10 @@ WORKDIR /app
 # Runtime uses a non-root user.
 RUN useradd --create-home --shell /usr/sbin/nologin app
 
+# Model caches are mounted as Docker volumes in development; create the
+# mountpoint with the runtime user as owner so FastEmbed/HF can write to it.
+RUN mkdir -p /app/.cache/huggingface && chown -R app:app /app/.cache
+
 # Copy dependencies and application code with the final runtime owner.
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --chown=app:app src ./src

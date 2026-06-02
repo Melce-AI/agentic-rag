@@ -2,6 +2,8 @@ import datetime as dt
 import hashlib
 import uuid
 
+from starlette.concurrency import run_in_threadpool
+
 from src.core.config import get_settings
 from src.core.exceptions import (
     AppException,
@@ -75,7 +77,10 @@ class DocumentIngestService:
                 source_name=source_name,
                 content_hash=content_hash,
             )
-            embeddings = self.embedding_provider.embed_documents([chunk.text for chunk in chunks])
+            embeddings = await run_in_threadpool(
+                self.embedding_provider.embed_documents,
+                [chunk.text for chunk in chunks],
+            )
             created_at = dt.datetime.now(dt.timezone.utc).isoformat()
 
             records = []

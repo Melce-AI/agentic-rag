@@ -1,6 +1,8 @@
 from dataclasses import replace
 from typing import Any
 
+from starlette.concurrency import run_in_threadpool
+
 from src.core.config import get_settings
 from src.core.exceptions import AppException, RagRetrievalError, RagValidationError
 from src.rag.embeddings import EmbeddingProvider, FastEmbedProvider
@@ -39,7 +41,7 @@ class HybridRetriever:
 
         try:
             limit = top_k or self.settings.rag_top_k
-            embedding = self.embedding_provider.embed_query(query)
+            embedding = await run_in_threadpool(self.embedding_provider.embed_query, query)
             raw_results = await self.vector_store.query_hybrid(
                 dense_vector=embedding.dense,
                 sparse_indices=embedding.sparse.indices,
@@ -48,7 +50,7 @@ class HybridRetriever:
                 limit=self.settings.rag_retrieval_candidates,
             )
             candidates = [self._map_result(result) for result in raw_results]
-            ranked = self._rerank(query, candidates)
+            ranked = await run_in_threadpool(self._rerank, query, candidates)
             return ranked[:limit]
         except AppException:
             raise
