@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(.venv/bin/python -m pytest tests/test_rag_foundation.py -q -k \"chunk or Chunk\")",
-      "Bash(.venv/bin/python -)",
-      "Bash(.venv/bin/python -m pytest tests/rag/ -q)"
-    ]
-  }
-}
