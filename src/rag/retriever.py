@@ -6,7 +6,7 @@ from src.core.exceptions import AppException, RagRetrievalError, RagValidationEr
 from src.rag.embeddings import EmbeddingProvider, FastEmbedProvider
 from src.rag.models import RetrievedChunk
 from src.rag.reranker import FastEmbedReranker, Reranker
-from src.storage.qdrant_client import QdrantManager, qdrant_manager
+from src.adapters.vector_store.qdrant import QdrantManager, qdrant_manager
 
 
 class HybridRetriever:

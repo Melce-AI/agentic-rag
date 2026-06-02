@@ -72,12 +72,13 @@ src/
 │  ├─ datasets/       # altın soru-cevap setleri
 │  └─ ragas_runner.py # faithfulness, context precision
 │
-├─ storage/           # adapter katmanı (DB detayları burada izole)
-│  ├─ qdrant_client.py   # (mevcut ✅)
-│  └─ postgres_client.py
+├─ adapters/          # dış sistem adaptörleri burada izole
+│  └─ vector_store/
+│     └─ qdrant.py       # QdrantManager: lifecycle + hybrid query/upsert/delete
+├─ observability/     # logging, tracing, metrics setup
 │
 ├─ schemas/           # Pydantic DTO'lar (request/response/domain)
-├─ core/              # config, logger, exceptions (mevcut ✅)
+├─ core/              # config, exceptions (mevcut ✅)
 └─ app.py             # composition root: wiring + lifespan
 ```
 
@@ -86,7 +87,7 @@ src/
   test edilebilir/değiştirilebilir.
 - Router'lar ince kalır → mevcut `documents.py`'daki gibi iş mantığının router'a
   sızması önlenir.
-- `storage/` adapter izolasyonu → yarın Qdrant yerine başka DB gelirse sadece bu
+- `adapters/` adapter izolasyonu → yarın Qdrant yerine başka DB gelirse sadece bu
   katman değişir.
 
 **Bağımlılık yönü (kural):** bağımlılık tek yöne akar; alt katman üst katmanı
@@ -94,7 +95,7 @@ import etmez.
 
 ```
 api  ─┐
-mcp  ─┼─▶ agents ─▶ rag ─▶ storage ─▶ core
+mcp  ─┼─▶ agents ─▶ rag ─▶ adapters ─▶ core
       (agents, rag'i import eder; rag asla agents'i import etmez)
 ```
 
@@ -163,8 +164,9 @@ Bu bölüm, ileride "neden böyle yapmıştık?" sorusuna cevap olması için tu
 | `mcp_server/` | MCP giriş kapısı — kendi process'i olan, tool sunan   | interface / adapter|
 | `agents/`     | Orkestrasyon (rag + mcp'yi *kullanır*)               | application        |
 | `rag/`        | Domain yeteneği (saf iş mantığı)                      | service / domain   |
-| `storage/`    | Adapter — DB detayları burada izole                  | infrastructure     |
-| `core/`       | Config, logger, exceptions                            | foundation         |
+| `adapters/`   | Adapter — dış sistem detayları burada izole           | infrastructure     |
+| `observability/` | Logging, tracing, metrics setup                    | cross-cutting      |
+| `core/`       | Config, exceptions                                    | foundation         |
 
 Kural: bağımlılık tek yöne akar (bkz. bölüm 2). `rag` bir gün `agents`'i import
 etmeye başlarsa — klasör adı ne olursa olsun — mimari bozulmuş demektir.
@@ -191,3 +193,23 @@ Bu mimari tek seferde değil, vizyon adımlarına paralel kurulur:
 3. `agents/graph.py` — LangGraph döngüsü + Redis checkpoint (Adım 3)
 4. `api/chat.py` SSE + citations + HITL — frontend (Adım 4)
 5. `evals/` + GitHub Actions CI gate — Faithfulness < 0.85 → merge blok (Adım 5)
+
+## 7. Observability and Adapter Naming
+
+Two naming updates were selected during the OpenTelemetry groundwork:
+
+- `src/observability/` owns cross-cutting visibility concerns: structured logging,
+  logging config, OpenTelemetry setup, and future metrics helpers. `core/` stays
+  focused on foundation primitives such as config and exceptions.
+- `src/adapters/vector_store/qdrant.py` replaces the previous storage module.
+  The Qdrant code is not just a passive storage location; it is an external-system
+  adapter that manages collection lifecycle, payload indexes, hybrid query, upsert,
+  delete, and health checks. The class name remains `QdrantManager` because that
+  behavior is broader than a simple client.
+
+Updated dependency direction:
+
+```text
+api/mcp -> agents -> rag -> adapters -> core
+observability is cross-cutting and is wired at the application boundary.
+```

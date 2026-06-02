@@ -57,4 +57,4 @@ Projemizde kullandığımız `sparse-text` alanı için Qdrant genellikle **Dot 
 ---
 
 > [!TIP]
-> Mevcut kodumuzda `src/storage/qdrant_client.py` içerisinde `Distance.COSINE` kullanıyoruz. RAG sistemimiz için en doğru seçim budur.
+> Mevcut kodumuzda `src/adapters/vector_store/qdrant.py` içerisinde `Distance.COSINE` kullanıyoruz. RAG sistemimiz için en doğru seçim budur.

@@ -54,7 +54,7 @@ Query alıyor:
 
 Bu da sadece `HybridRetriever.search()` çağırıyor.
 
-Buradaki business kuralı şu: router ince, RAG logic `src/rag/`, Qdrant detayı `src/storage/qdrant_client.py`.
+Buradaki business kuralı şu: router ince, RAG logic `src/rag/`, Qdrant detayı `src/adapters/vector_store/qdrant.py`.
 
 ## **2. Domain Model**
 `src/rag/models.py` içinde RAG iç modelleri var:
@@ -366,7 +366,7 @@ Orijinal text ne?
 ```
 
 ## **10. Qdrant Collection Mantığı**
-`src/storage/qdrant_client.py` startup’ta collection hazırlar.
+`src/adapters/vector_store/qdrant.py` startup’ta collection hazırlar.
 
 Collection iki vector alanına sahip:
 

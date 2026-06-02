@@ -114,17 +114,17 @@ def setup_logging() -> None:
     - Terminal handler levels controlled by Settings.LOG_LEVEL (dynamic).
     - File log handler follows LOG_LEVEL dynamically. Useful for checking what your LOG_LEVEL actually captures.
     - File JSON handler always logs at DEBUG for full traceability (persistent).
-    - Hierarchical loggers: src.api, src.core, src.storage, src.services etc. can be configured independently.
+    - Hierarchical loggers: src.api, src.core, src.adapters, src.rag etc. can be configured independently.
     - Non-blocking I/O via QueueHandler + QueueListener.
     - stdout/stderr separation: INFO and below go to stdout, WARNING+ to stderr.
     
     Logger hierarchy example:
-        logger = logging.getLogger(__name__)  # Gets "src.api", "src.storage", etc.
+        logger = logging.getLogger(__name__)  # Gets "src.api", "src.adapters", etc.
         
     Configure per-module levels in logging_config.json if needed.
     """
 
-    config_file = pathlib.Path("src/core/logging_config.json")
+    config_file = pathlib.Path("src/observability/logging_config.json")
     with open(config_file, "r", encoding="utf-8") as f_in:
         config = json.load(f_in)
 

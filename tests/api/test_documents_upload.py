@@ -11,12 +11,13 @@ class _FakeDocumentIngestService:
     def __init__(self) -> None:
         self.calls = []
 
-    async def ingest_document(self, *, source_name: str, content: str, tenant_id: str):
+    async def ingest_document(self, *, source_name: str, content: str, tenant_id: str, content_kind: str):
         self.calls.append(
             {
                 "source_name": source_name,
                 "content": content,
                 "tenant_id": tenant_id,
+                "content_kind": content_kind,
             }
         )
         return {
@@ -50,5 +51,6 @@ def test_upload_document_loads_file_and_ingests(monkeypatch):
             "source_name": "policy.md",
             "content": "# Policy\n\nMFA is required.",
             "tenant_id": "tenant-a",
+            "content_kind": "text",
         }
     ]

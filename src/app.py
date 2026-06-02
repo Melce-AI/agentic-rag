@@ -12,8 +12,8 @@ from src.core.exception_handlers import (
     validation_exception_handler,
 )
 from src.core.exceptions import AppException
-from src.core.logger import setup_logging
-from src.storage.qdrant_client import qdrant_manager
+from src.adapters.vector_store.qdrant import qdrant_manager
+from src.observability.logging import setup_logging
 
 
 logger = logging.getLogger(__name__)

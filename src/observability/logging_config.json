@@ -10,7 +10,7 @@
       "datefmt": "%Y-%m-%dT%H:%M:%S%z"
     },
     "json": {
-      "()": "src.core.logger.CustomJSONFormatter",
+      "()": "src.observability.logging.CustomJSONFormatter",
       "fmt_keys": {
         "level": "levelname",
         "message": "message",
@@ -31,7 +31,7 @@
    },
     "filters": {
     "no_errors": {
-      "()": "src.core.logger.NonErrorFilter"
+      "()": "src.observability.logging.NonErrorFilter"
     }
   },
     "handlers": {
@@ -65,7 +65,7 @@
         "encoding": "utf-8"
       },
       "queue_handler": {
-        "class": "src.core.logger.CustomQueueHandler",
+        "class": "src.observability.logging.CustomQueueHandler",
         "handlers": [
           "stdout",
           "stderr",

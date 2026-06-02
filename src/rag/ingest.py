@@ -14,7 +14,7 @@ from src.core.exceptions import (
 from src.rag.chunking import HeadingAwareChunker, TableChunker
 from src.rag.embeddings import EmbeddingProvider, FastEmbedProvider
 from src.rag.models import Chunk, ContentKind, Document
-from src.storage.qdrant_client import QdrantManager, qdrant_manager
+from src.adapters.vector_store.qdrant import QdrantManager, qdrant_manager
 
 
 class DocumentIngestService:
