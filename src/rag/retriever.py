@@ -31,7 +31,7 @@ class HybridRetriever:
         else:
             self.reranker = None
 
-    @traced("rag.retrieve")
+    @traced("rag.retrieve", span_kind="RETRIEVER")
     async def search(
         self,
         *,
@@ -44,6 +44,7 @@ class HybridRetriever:
 
         limit = top_k or self.settings.rag_top_k
         span = trace.get_current_span()
+        span.set_attribute("input.value", query)
         span.set_attribute("rag.tenant_id", tenant_id)
         span.set_attribute("rag.query", query[:200])
         span.set_attribute("rag.top_k", limit)
@@ -62,6 +63,10 @@ class HybridRetriever:
             ranked = await run_in_threadpool(self._rerank, query, candidates)
             results = ranked[:limit]
 
+            for i, r in enumerate(results):
+                span.set_attribute(f"retrieval.documents.{i}.document.id", r.chunk_id)
+                span.set_attribute(f"retrieval.documents.{i}.document.content", r.text[:500])
+                span.set_attribute(f"retrieval.documents.{i}.document.score", r.score)
             span.set_attribute("rag.candidates", len(raw_results))
             span.set_attribute("rag.result_count", len(results))
             return results
@@ -72,6 +77,7 @@ class HybridRetriever:
                 details={"tenant_id": tenant_id, "query": query, "error": str(exc)}
             ) from exc
 
+    @traced("rag.rerank", span_kind="RERANKER")
     def _rerank(self, query: str, candidates: list[RetrievedChunk]) -> list[RetrievedChunk]:
         """Re-score candidates with the cross-encoder, then order best-first.
 
@@ -79,6 +85,9 @@ class HybridRetriever:
         each chunk's `score` becomes the rerank score and the original retrieval
         score is preserved under `metadata["retrieval_score"]` for observability.
         """
+        span = trace.get_current_span()
+        span.set_attribute("reranker.query", query[:200])
+        span.set_attribute("reranker.top_k", len(candidates))
         if not candidates or self.reranker is None:
             return sorted(
                 candidates,

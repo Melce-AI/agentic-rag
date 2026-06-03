@@ -1,4 +1,5 @@
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile
+from opentelemetry import trace
 
 from src.rag.ingest import DocumentIngestService
 from src.rag.loaders import load_document
@@ -29,11 +30,15 @@ async def list_documents(
 
 @router.post("/ingest", response_model=SuccessResponse[DocumentIngestResult])
 async def ingest_document(payload: DocumentIngestRequest, request: Request):
+    span = trace.get_current_span()
+    span.set_attribute("openinference.span.kind", "CHAIN")
+    span.set_attribute("input.value", payload.source_name)
     result = await document_ingest_service.ingest_document(
         source_name=payload.source_name,
         content=payload.content,
         tenant_id=payload.tenant_id,
     )
+    span.set_attribute("output.value", result.get("document_id", ""))
     return SuccessResponse(data=result, request_id=request.state.request_id)
 
 
@@ -43,6 +48,9 @@ async def upload_document(
     tenant_id: str = Form(..., min_length=1),
     file: UploadFile = File(...),
 ):
+    span = trace.get_current_span()
+    span.set_attribute("openinference.span.kind", "CHAIN")
+    span.set_attribute("input.value", file.filename or "")
     loaded_document = load_document(
         source_name=file.filename,
         raw_content=await file.read(),
@@ -53,6 +61,7 @@ async def upload_document(
         tenant_id=tenant_id,
         content_kind=loaded_document.content_kind,
     )
+    span.set_attribute("output.value", result.get("document_id", ""))
     return SuccessResponse(data=result, request_id=request.state.request_id)
 
 

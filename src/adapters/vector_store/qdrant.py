@@ -7,9 +7,10 @@ from qdrant_client.http.models import (
 )
 from src.core.config import get_settings
 from src.core.exceptions import (
-    VectorStoreInitializationError, 
+    VectorStoreInitializationError,
     VectorStoreOperationError
 )
+from src.observability.tracing import traced
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -117,6 +118,7 @@ class QdrantManager:
             ]
         )
 
+    @traced("qdrant.upsert_chunks")
     async def upsert_chunks(self, records: list[dict]):
         """
         Batch chunk insertion for hybrid dense+sparse search.
@@ -155,6 +157,7 @@ class QdrantManager:
                 details={"error": message, "point_count": len(points), "batch_size": batch_size},
             ) from e
 
+    @traced("qdrant.hybrid_search")
     async def query_hybrid(
         self,
         *,

@@ -53,7 +53,7 @@ class DocumentIngestService:
             return self.table_chunker
         return self.chunker
 
-    @traced("rag.ingest")
+    @traced("rag.ingest", span_kind="CHAIN")
     async def ingest_document(
         self,
         *,
@@ -68,6 +68,7 @@ class DocumentIngestService:
             raise RagValidationError("content must not be empty")
 
         span = trace.get_current_span()
+        span.set_attribute("input.value", source_name)
         span.set_attribute("rag.tenant_id", tenant_id)
         span.set_attribute("rag.source_name", source_name)
         span.set_attribute("rag.content_kind", content_kind.value)
@@ -133,6 +134,7 @@ class DocumentIngestService:
 
             await self.vector_store.upsert_chunks(records)
 
+            span.set_attribute("output.value", document.document_id)
             span.set_attribute("rag.document_id", document.document_id)
             span.set_attribute("rag.chunk_count", len(records))
             return {

@@ -1,8 +1,11 @@
 from typing import Protocol
 
+from opentelemetry import trace
+
 from src.core.config import get_settings
 from src.core.exceptions import RagEmbeddingError
 from src.rag.models import EmbeddedText, SparseEmbedding
+from src.observability.tracing import traced
 
 
 class EmbeddingProvider(Protocol):
@@ -37,10 +40,14 @@ class FastEmbedProvider:
         self._dense_model = None
         self._sparse_model = None
 
+    @traced("rag.embed_documents", span_kind="EMBEDDING")
     def embed_documents(self, texts: list[str]) -> list[EmbeddedText]:
         if not texts:
             return []
 
+        span = trace.get_current_span()
+        span.set_attribute("input.value", f"{len(texts)} texts")
+        span.set_attribute("embedding.model_name", self.dense_model_name)
         try:
             self._validate_texts(texts)
             dense_vectors = [self._as_float_list(vector) for vector in self.dense_model.embed(texts)]
@@ -65,7 +72,9 @@ class FastEmbedProvider:
                 }
             ) from exc
 
+    @traced("rag.embed_query", span_kind="EMBEDDING")
     def embed_query(self, text: str) -> EmbeddedText:
+        trace.get_current_span().set_attribute("input.value", text[:200])
         embedded = self.embed_documents([text])
         return embedded[0]
 
