@@ -1,6 +1,7 @@
 from dataclasses import replace
 from typing import Any
 
+from opentelemetry import trace
 from starlette.concurrency import run_in_threadpool
 
 from src.core.config import get_settings
@@ -9,6 +10,7 @@ from src.rag.embeddings import EmbeddingProvider, FastEmbedProvider
 from src.rag.models import RetrievedChunk
 from src.rag.reranker import FastEmbedReranker, Reranker
 from src.adapters.vector_store.qdrant import QdrantManager, qdrant_manager
+from src.observability.tracing import traced
 
 
 class HybridRetriever:
@@ -29,6 +31,7 @@ class HybridRetriever:
         else:
             self.reranker = None
 
+    @traced("rag.retrieve")
     async def search(
         self,
         *,
@@ -39,8 +42,14 @@ class HybridRetriever:
         if not query.strip():
             raise RagValidationError("query must not be empty")
 
+        limit = top_k or self.settings.rag_top_k
+        span = trace.get_current_span()
+        span.set_attribute("rag.tenant_id", tenant_id)
+        span.set_attribute("rag.query", query[:200])
+        span.set_attribute("rag.top_k", limit)
+        span.set_attribute("rag.rerank_enabled", self.reranker is not None)
+
         try:
-            limit = top_k or self.settings.rag_top_k
             embedding = await run_in_threadpool(self.embedding_provider.embed_query, query)
             raw_results = await self.vector_store.query_hybrid(
                 dense_vector=embedding.dense,
@@ -51,7 +60,11 @@ class HybridRetriever:
             )
             candidates = [self._map_result(result) for result in raw_results]
             ranked = await run_in_threadpool(self._rerank, query, candidates)
-            return ranked[:limit]
+            results = ranked[:limit]
+
+            span.set_attribute("rag.candidates", len(raw_results))
+            span.set_attribute("rag.result_count", len(results))
+            return results
         except AppException:
             raise
         except Exception as exc:

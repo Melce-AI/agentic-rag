@@ -2,6 +2,7 @@ import datetime as dt
 import hashlib
 import uuid
 
+from opentelemetry import trace
 from starlette.concurrency import run_in_threadpool
 
 from src.core.config import get_settings
@@ -17,6 +18,7 @@ from src.rag.chunking import HeadingAwareChunker, TableChunker
 from src.rag.embeddings import EmbeddingProvider, FastEmbedProvider
 from src.rag.models import Chunk, ContentKind, Document
 from src.adapters.vector_store.qdrant import QdrantManager, qdrant_manager
+from src.observability.tracing import traced
 
 
 class DocumentIngestService:
@@ -51,6 +53,7 @@ class DocumentIngestService:
             return self.table_chunker
         return self.chunker
 
+    @traced("rag.ingest")
     async def ingest_document(
         self,
         *,
@@ -63,6 +66,11 @@ class DocumentIngestService:
             raise RagValidationError("source_name must not be empty")
         if not content.strip():
             raise RagValidationError("content must not be empty")
+
+        span = trace.get_current_span()
+        span.set_attribute("rag.tenant_id", tenant_id)
+        span.set_attribute("rag.source_name", source_name)
+        span.set_attribute("rag.content_kind", content_kind.value)
 
         try:
             chunks = self._chunker_for(content_kind).split(content)
@@ -124,6 +132,9 @@ class DocumentIngestService:
                 )
 
             await self.vector_store.upsert_chunks(records)
+
+            span.set_attribute("rag.document_id", document.document_id)
+            span.set_attribute("rag.chunk_count", len(records))
             return {
                 "document_id": document.document_id,
                 "chunk_count": len(records),
