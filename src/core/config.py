@@ -27,9 +27,21 @@ class Settings(BaseSettings):
     # Core API Server Settings
     core_api_port: int = 8089
 
-    # Local LLM (Ollama) — powers the SQL agent loop.
+    # LLM that powers the SQL agent loop.
+    # provider: "huggingface" (free serverless Inference API, just needs a token)
+    #           or "ollama" (fully local, needs Ollama installed + a model pulled).
+    llm_provider: str = "huggingface"
+
+    # Hugging Face Inference API
+    # Must be a model the HF router serves WITH tool-calling (many small models
+    # reject tools/tool_choice). Qwen2.5-Instruct and Llama-3.3-70B work.
+    hf_model: str = "Qwen/Qwen2.5-72B-Instruct"
+    hf_token: Optional[SecretStr] = None  # read from HF_TOKEN env
+
+    # Local Ollama
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "llama3.1:8b"
+
     # Safety bound on the agent's tool-calling loop (avoid runaway calls).
     agent_max_steps: int = 6
 

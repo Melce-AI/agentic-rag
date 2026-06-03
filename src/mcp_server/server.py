@@ -21,6 +21,16 @@ logger = logging.getLogger(__name__)
 
 mcp = FastMCP("agentic-rag-mcp")
 
+# TODO (distributed tracing): this MCP server runs as a separate process and does
+# NOT call setup_tracing(), so the @traced spans inside the tools/adapters (e.g.
+# postgres.run_select, qdrant.hybrid_search) are not exported to Phoenix. The
+# agent currently captures tool calls with a client-side TOOL span instead, so we
+# still see "agent -> tool -> result". To get end-to-end (distributed) traces:
+#   1. call setup_tracing() here on startup,
+#   2. propagate the trace context from the agent (client) into the tool calls
+#      so the server spans nest under the agent's AGENT span (one trace, two
+#      processes) instead of appearing as disconnected roots.
+
 rag_search.register(mcp)
 read_logs.register(mcp)
 sql.register(mcp)

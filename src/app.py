@@ -70,6 +70,7 @@ async def add_request_id_middleware(request: Request, call_next):
     return response
 
 
+from src.api.routers.agent import router as agent_router
 from src.api.routers.documents import router as documents_router
 from src.api.routers.search import router as search_router
 
@@ -81,6 +82,7 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(documents_router)
 app.include_router(search_router)
+app.include_router(agent_router)
 
 FastAPIInstrumentor.instrument_app(app)
 

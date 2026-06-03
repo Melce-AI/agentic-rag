@@ -24,6 +24,7 @@ dependencies = [
     "openinference-semantic-conventions>=0.1.12",
     "psycopg[binary,pool]>=3.3.4",
     "ollama>=0.6.2",
+    "huggingface-hub>=1.17.0",
 ]
 
 [dependency-groups]

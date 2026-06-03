@@ -13,6 +13,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "fastembed" },
+    { name = "huggingface-hub" },
     { name = "langchain-text-splitters" },
     { name = "mcp", extra = ["cli"] },
     { name = "ollama" },
@@ -41,6 +42,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.135.1" },
     { name = "fastembed", specifier = ">=0.7.3" },
+    { name = "huggingface-hub", specifier = ">=1.17.0" },
     { name = "langchain-text-splitters", specifier = ">=1.0.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.27.2" },
     { name = "ollama", specifier = ">=0.6.2" },
