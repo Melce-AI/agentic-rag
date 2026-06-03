@@ -1,7 +1,5 @@
 # Agentic RAG: Enterprise-Grade Agentic Knowledge Runtime
 
-> An autonomous knowledge system that connects enterprise documents, SQL databases, and logs through a secure MCP process boundary, it validates every LLM response against source material and requires human approval before any destructive database operation.
-
 [![Python](https://img.shields.io/badge/Python-3.13+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.135+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent-FF6B35?style=flat-square)](https://langchain-ai.github.io/langgraph/)
@@ -9,7 +7,8 @@
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Traced-7B2FBE?style=flat-square&logo=opentelemetry)](https://opentelemetry.io)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square)](https://opensource.org/licenses/Apache-2.0)
 
----
+> An autonomous knowledge system that connects enterprise documents, SQL databases, and logs through a secure MCP process boundary, it validates every LLM response against source material and requires human approval before any destructive database operation.
+
 
 ## Vision & Mission
 
