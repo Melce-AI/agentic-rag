@@ -86,12 +86,13 @@ flowchart TD
 | Service | Image | Role |
 |---|---|---|
 | `api` | `infra/api/Dockerfile` | FastAPI — routers, middleware, SSE streaming |
-| `mcp-server` | `infra/mcp/Dockerfile` | Internal MCP process — data access boundary |
 | `frontend` | `infra/frontend/Dockerfile` | Streamlit — trace viewer, HITL approval, citations |
 | `qdrant` | `qdrant/qdrant` | Hybrid vector DB (dense + sparse) |
 | `postgres` | `postgres:16` | Structured operational data |
 | `redis` | `redis:7-alpine` | LangGraph state checkpointer |
 | `phoenix` | `infra/phoenix/docker-compose.yml` | OTEL trace collector + dashboard |
+
+> **MCP Server** runs as a stdio subprocess (launched by the agent process), not a separate Docker service.
 
 ### Source Layout
 
@@ -100,7 +101,7 @@ src/
 ├── api/          routers/       — thin HTTP entrypoint, no business logic
 ├── rag/          chunking · embeddings · ingest · retriever · reranker
 ├── agents/       graph · state · nodes (researcher/analyst/auditor) · checkpointer
-├── mcp_server/   server · tools (search · read_logs · sql_query)
+├── mcp_server/   server · tools/ (rag_search · read_logs)
 ├── evals/        datasets/ · ragas_runner.py
 ├── adapters/     vector_store/qdrant.py
 ├── observability/ logging · tracing
