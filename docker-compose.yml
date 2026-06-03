@@ -5,6 +5,8 @@ include:
   - path: infra/api/docker-compose.yml
   # Qdrant Vector DB
   - path: infra/qdrant-db/docker-compose.yml
+  # PostgreSQL relational DB (Sentinel MCP sql_query tool)
+  - path: infra/postgres/docker-compose.yml
   # Frontend
   - path: infra/frontend/docker-compose.yml
   # Phoenix AI observability

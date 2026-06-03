@@ -10,11 +10,12 @@ Run over stdio (how an agent client launches it):
     uv run python -m src.mcp_server.server
 """
 
+import json
 import logging
 
 from mcp.server.fastmcp import FastMCP
 
-from src.mcp_server.tools import rag_search, read_logs
+from src.mcp_server.tools import rag_search, read_logs, sql
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ mcp = FastMCP("agentic-rag-mcp")
 
 rag_search.register(mcp)
 read_logs.register(mcp)
+sql.register(mcp)
 
 
 if __name__ == "__main__":

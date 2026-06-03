@@ -22,6 +22,8 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi>=0.49b0",
     "opentelemetry-exporter-otlp-proto-http>=1.28.0",
     "openinference-semantic-conventions>=0.1.12",
+    "psycopg[binary,pool]>=3.3.4",
+    "ollama>=0.6.2",
 ]
 
 [dependency-groups]

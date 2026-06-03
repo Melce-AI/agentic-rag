@@ -11,18 +11,24 @@ decisions. Read the relevant `docs/` pages before starting a task.
 
 ## Status (as of 2026-06)
 
-At the infrastructure/skeleton stage of Step 1 (Advanced RAG). Foundation is in
-place; the RAG core does not exist yet.
+Step 1 (Advanced RAG) is done; Step 2 (MCP) is underway.
 
-- Done: FastAPI skeleton, lifespan, request-id middleware, OpenAPI tags;
-  centralized exception handling; structured JSON logging; Qdrant manager with
-  dense + sparse vector config and payload indexes (hybrid-ready); pydantic
-  settings; multi-stage Docker and multi docker-compose.
+- Done (Step 1): FastAPI skeleton, lifespan, request-id middleware, OpenAPI
+  tags; centralized exception handling; structured JSON logging; Qdrant manager
+  with dense + sparse vectors and payload indexes; heading-aware + table
+  chunking; FastEmbed dense/sparse embeddings; hybrid retrieval with RRF;
+  cross-encoder reranking; document ingest/upload/list/delete; pydantic
+  settings; multi-stage Docker and multi docker-compose; OpenTelemetry tracing
+  to Phoenix.
+- Done (Step 2, partial): Sentinel MCP server with read-only tools — log tools
+  (`list_log_files`, `read_logs`) and SQL tools (`list_tables`,
+  `describe_table`, `sql_query`) over a sample Postgres DB. Two-layer SQL safety:
+  read-only `sentinel_ro` DB role + `ensure_read_only()` guard. See
+  `docs/mcp/sql_tool_design.md`.
 - Partial: Streamlit UI is a placeholder.
-- Missing: real `documents.py` processing (only simulates errors), embedding/
-  ingest/retrieval, MCP, agents, evals.
-- Not yet in deps: `langchain`, `langgraph`, `mcp`, embedding libs — add to
-  `pyproject.toml` when the relevant step begins.
+- Missing: agents (LangGraph), `/chat` streaming + HITL, evals.
+- Not yet in deps: `langgraph`, eval libs (`ragas`/`deepeval`) — add to
+  `pyproject.toml` when Step 3/5 begins.
 
 ## Scope
 
@@ -45,7 +51,8 @@ place; the RAG core does not exist yet.
 - uv
 - Qdrant
 - Streamlit
-- Planned: LangGraph, MCP, Redis, PostgreSQL, RAGAS/DeepEval, Phoenix, Next.js
+- MCP (`mcp[cli]`), PostgreSQL (`psycopg`), Phoenix/OpenTelemetry
+- Planned: LangGraph, Redis, RAGAS/DeepEval, Next.js
 
 ## Commands
 

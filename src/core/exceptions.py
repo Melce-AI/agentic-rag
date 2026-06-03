@@ -112,6 +112,58 @@ class VectorStoreOperationError(VectorStoreError):
         )
 
 
+class SqlStoreError(AppException):
+    def __init__(
+        self,
+        message: str,
+        code: str = "SQL_00",
+        status_code: int = 500,
+        details: Optional[Any] = None,
+    ):
+        super().__init__(
+            code=code,
+            message=message,
+            status_code=status_code,
+            details=details,
+        )
+
+
+class SqlStoreInitializationError(SqlStoreError):
+    def __init__(self, details: Optional[Any] = None):
+        super().__init__(
+            code="SQL_01",
+            message="SQL store initialization failed",
+            status_code=500,
+            details=details,
+        )
+
+
+class SqlStoreOperationError(SqlStoreError):
+    def __init__(self, operation: str, details: Optional[Any] = None):
+        super().__init__(
+            code="SQL_02",
+            message=f"SQL store operation '{operation}' failed",
+            status_code=500,
+            details=details,
+        )
+
+
+class SqlGuardError(SqlStoreError):
+    """Raised when a query is rejected by the read-only SQL guard.
+
+    This is a safety refusal, not an internal failure: the query was understood
+    and deliberately blocked (e.g. a write statement reached a read-only tool).
+    """
+
+    def __init__(self, message: str, details: Optional[Any] = None):
+        super().__init__(
+            code="SQL_FORBIDDEN",
+            message=message,
+            status_code=403,
+            details=details,
+        )
+
+
 class RagError(AppException):
     def __init__(
         self,

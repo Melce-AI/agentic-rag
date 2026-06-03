@@ -1,0 +1,43 @@
+# PostgreSQL — relational data source for the Sentinel MCP `sql_query` tool.
+# Synthetic e-commerce data only (see initdb/); no real or company data.
+services:
+  postgres-db:
+    image: postgres:17-alpine
+    container_name: postgres-db
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sentinel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentinel}
+      POSTGRES_DB: ${POSTGRES_DB:-sentinel_db}
+      # Password for the read-only role the MCP SQL tool connects with.
+      SENTINEL_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:-sentinel_ro}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    expose:
+      - 5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Scripts here run once, in alphabetical order, only on first init
+      # (i.e. when the data volume is empty).
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sentinel} -d ${POSTGRES_DB:-sentinel_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - agentic-rag-network
+
+networks:
+  agentic-rag-network:
+    name: agentic-rag-network
+    external: true
+
+volumes:
+  postgres_data:
+    name: agentic-rag-postgres-data

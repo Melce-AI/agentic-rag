@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     # Core API Server Settings
     core_api_port: int = 8089
 
+    # Local LLM (Ollama) — powers the SQL agent loop.
+    ollama_host: str = "http://localhost:11434"
+    ollama_model: str = "llama3.1:8b"
+    # Safety bound on the agent's tool-calling loop (avoid runaway calls).
+    agent_max_steps: int = 6
+
     # Vector Database (Qdrant) Settings
     qdrant_host: str = "qdrant-db"
     qdrant_port: int = 6333
@@ -37,6 +43,16 @@ class Settings(BaseSettings):
     # Upsert points in batches so a large document (e.g. a 20k-row CSV that
     # produces thousands of chunks) never exceeds Qdrant's request size limit.
     qdrant_upsert_batch_size: int = 128
+
+    # Relational Database (Postgres) Settings — Sentinel MCP sql_query tool.
+    # The tool connects with the read-only role, never the owner.
+    postgres_host: str = "postgres-db"
+    postgres_port: int = 5432
+    postgres_db: str = "sentinel_db"
+    postgres_ro_user: str = "sentinel_ro"
+    postgres_ro_password: SecretStr = SecretStr("sentinel_ro")
+    # Hard server-side cap on rows any single sql_query call may return.
+    postgres_query_row_limit: int = 100
 
     # Advanced RAG Settings
     rag_dense_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
