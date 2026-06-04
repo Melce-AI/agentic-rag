@@ -6,6 +6,7 @@ tool-call trail it followed.
 """
 
 from fastapi import APIRouter, Request
+from opentelemetry import trace
 from pydantic import BaseModel, Field
 
 from src.agents.sql_agent import run_agent
@@ -33,5 +34,9 @@ class AgentAnswer(BaseModel):
 
 @router.post("/ask", response_model=SuccessResponse[AgentAnswer])
 async def agent_ask(payload: AgentAskRequest, request: Request):
+    span = trace.get_current_span()
+    span.set_attribute("openinference.span.kind", "AGENT")
+    span.set_attribute("input.value", payload.question)
     result = await run_agent(payload.question)
+    span.set_attribute("output.value", result["answer"])
     return SuccessResponse(data=result, request_id=request.state.request_id)

@@ -84,7 +84,7 @@ app.include_router(documents_router)
 app.include_router(search_router)
 app.include_router(agent_router)
 
-FastAPIInstrumentor.instrument_app(app)
+FastAPIInstrumentor.instrument_app(app, excluded_urls="/health")
 
 
 @app.get("/health", tags=["Health"])
