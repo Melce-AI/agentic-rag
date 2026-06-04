@@ -54,9 +54,7 @@ async def main() -> None:
 
             # 6) Trigger the file guard on purpose.
             print("=== call read_logs(filename='../pyproject.toml') -> guard ===")
-            res = await session.call_tool(
-                "read_logs", {"filename": "../pyproject.toml"}
-            )
+            res = await session.call_tool("read_logs", {"filename": "../pyproject.toml"})
             print("isError =", res.isError)
             print(res.content[0].text)
 

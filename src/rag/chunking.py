@@ -29,9 +29,7 @@ class HeadingAwareChunker:
         if max_tokens < 20:
             raise ValueError("max_tokens must be at least 20")
         if overlap_tokens < 0 or overlap_tokens >= max_tokens:
-            raise ValueError(
-                "overlap_tokens must be non-negative and smaller than max_tokens"
-            )
+            raise ValueError("overlap_tokens must be non-negative and smaller than max_tokens")
 
         self.max_tokens = max_tokens
         self.overlap_tokens = overlap_tokens
@@ -233,9 +231,7 @@ class TableChunker:
         named = [header for header in headers if header]
         return f"columns: {', '.join(named)}" if named else ""
 
-    def _emit(
-        self, schema_prefix: str, records: list[str], chunk_index: int
-    ) -> ChunkDraft:
+    def _emit(self, schema_prefix: str, records: list[str], chunk_index: int) -> ChunkDraft:
         body = "\n".join(records)
         text = f"{schema_prefix}\n{body}" if schema_prefix else body
         return ChunkDraft(

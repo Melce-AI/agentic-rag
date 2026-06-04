@@ -34,9 +34,7 @@ def register(mcp: FastMCP) -> None:
             missing.
         """
         if "/" in filename or "\\" in filename or filename.startswith("."):
-            raise ValueError(
-                "filename must be a plain file name inside the logs directory"
-            )
+            raise ValueError("filename must be a plain file name inside the logs directory")
 
         lines = max(1, min(lines, _MAX_LINES))
 

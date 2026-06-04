@@ -30,25 +30,4 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
-    "ruff>=0.9.0",
 ]
-
-# --- Ruff: linter (check) + formatter (format) ---
-# One fast tool replacing flake8 + isort + black. Config lives here so local
-# runs and CI enforce identical rules.
-[tool.ruff]
-target-version = "py313"
-line-length = 88
-
-[tool.ruff.lint]
-# E = pycodestyle, F = pyflakes (dead code, unused imports). Ruff's defaults.
-[tool.ruff.lint.per-file-ignores]
-# Router imports sit after `app` is created to avoid circular imports.
-"src/app.py" = ["E402"]
-# Imports follow a sys.path tweak in this manual log-check script.
-"tests/test_logging.py" = ["E402"]
-
-# --- Pytest: where tests live + default flags ---
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-q"

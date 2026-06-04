@@ -15,9 +15,7 @@ router = APIRouter(prefix="/agent", tags=["Agent"])
 
 
 class AgentAskRequest(BaseModel):
-    question: str = Field(
-        ..., min_length=1, examples=["En çok ciro yapan 3 ürün hangisi?"]
-    )
+    question: str = Field(..., min_length=1, examples=["En çok ciro yapan 3 ürün hangisi?"])
 
 
 class AgentStep(BaseModel):

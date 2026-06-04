@@ -83,13 +83,7 @@ class ResourceNotFoundError(AppException):
 
 
 class VectorStoreError(AppException):
-    def __init__(
-        self,
-        message: str,
-        code: str = "VEC_00",
-        status_code: int = 500,
-        details: Optional[Any] = None,
-    ):
+    def __init__(self, message: str, code: str = "VEC_00", status_code: int = 500, details: Optional[Any] = None):
         super().__init__(
             code=code,
             message=message,

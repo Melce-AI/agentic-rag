@@ -57,9 +57,7 @@ def test_sql_query_returns_json_rows(monkeypatch):
     )
     mcp = _build_mcp()
 
-    out = _text(
-        asyncio.run(mcp.call_tool("sql_query", {"sql": "SELECT name FROM products"}))
-    )
+    out = _text(asyncio.run(mcp.call_tool("sql_query", {"sql": "SELECT name FROM products"})))
 
     assert "Wireless Mouse" in out
     assert "174.93" in out
@@ -69,9 +67,7 @@ def test_sql_query_empty_result(monkeypatch):
     monkeypatch.setattr(sql.postgres_manager, "run_select", _fake_select([]))
     mcp = _build_mcp()
 
-    out = _text(
-        asyncio.run(mcp.call_tool("sql_query", {"sql": "SELECT 1 WHERE false"}))
-    )
+    out = _text(asyncio.run(mcp.call_tool("sql_query", {"sql": "SELECT 1 WHERE false"})))
 
     assert "no rows" in out.lower()
 

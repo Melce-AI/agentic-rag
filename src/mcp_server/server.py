@@ -10,6 +10,7 @@ Run over stdio (how an agent client launches it):
     uv run python -m src.mcp_server.server
 """
 
+import json
 import logging
 
 from mcp.server.fastmcp import FastMCP
