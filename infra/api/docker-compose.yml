@@ -4,7 +4,9 @@ services:
   agentic-rag-api:
     build:
       context: ../..
-      dockerfile: infra/api/Dockerfile
+      # Shared Dockerfile; the `api` target reuses the common builder stage.
+      dockerfile: infra/Dockerfile
+      target: api
     container_name: agentic_rag_api
     # Read environment variables from the root .env file
     env_file:

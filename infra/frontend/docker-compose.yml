@@ -2,7 +2,9 @@ services:
   agentic-rag-frontend:
     build:
       context: ../..
-      dockerfile: infra/frontend/Dockerfile
+      # Shared Dockerfile; the `frontend` target reuses the common builder stage.
+      dockerfile: infra/Dockerfile
+      target: frontend
     container_name: agentic_rag_frontend
     # Read environment variables from the root .env file
     env_file:
