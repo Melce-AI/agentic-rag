@@ -51,7 +51,9 @@ class HybridRetriever:
         span.set_attribute("rag.rerank_enabled", self.reranker is not None)
 
         try:
-            embedding = await run_in_threadpool(self.embedding_provider.embed_query, query)
+            embedding = await run_in_threadpool(
+                self.embedding_provider.embed_query, query
+            )
             raw_results = await self.vector_store.query_hybrid(
                 dense_vector=embedding.dense,
                 sparse_indices=embedding.sparse.indices,
@@ -65,7 +67,9 @@ class HybridRetriever:
 
             for i, r in enumerate(results):
                 span.set_attribute(f"retrieval.documents.{i}.document.id", r.chunk_id)
-                span.set_attribute(f"retrieval.documents.{i}.document.content", r.text[:500])
+                span.set_attribute(
+                    f"retrieval.documents.{i}.document.content", r.text[:500]
+                )
                 span.set_attribute(f"retrieval.documents.{i}.document.score", r.score)
             span.set_attribute("rag.candidates", len(raw_results))
             span.set_attribute("rag.result_count", len(results))
@@ -78,7 +82,9 @@ class HybridRetriever:
             ) from exc
 
     @traced("rag.rerank", span_kind="RERANKER")
-    def _rerank(self, query: str, candidates: list[RetrievedChunk]) -> list[RetrievedChunk]:
+    def _rerank(
+        self, query: str, candidates: list[RetrievedChunk]
+    ) -> list[RetrievedChunk]:
         """Re-score candidates with the cross-encoder, then order best-first.
 
         Without a reranker we fall back to the hybrid retrieval score. With one,
@@ -128,7 +134,8 @@ class HybridRetriever:
         metadata = {
             key: value
             for key, value in payload.items()
-            if key not in {"chunk_id", "document_id", "source_name", "heading_path", "text"}
+            if key
+            not in {"chunk_id", "document_id", "source_name", "heading_path", "text"}
         }
 
         return RetrievedChunk(

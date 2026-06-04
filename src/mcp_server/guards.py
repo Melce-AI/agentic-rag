@@ -20,10 +20,34 @@ from src.core.exceptions import SqlGuardError
 # data-modifying CTE (``WITH x AS (DELETE ...)``) is caught too.
 _FORBIDDEN_KEYWORDS = frozenset(
     {
-        "insert", "update", "delete", "truncate", "drop", "alter", "create",
-        "grant", "revoke", "merge", "call", "do", "copy", "vacuum", "analyze",
-        "reindex", "cluster", "comment", "lock", "set", "reset", "begin",
-        "commit", "rollback", "savepoint", "prepare", "execute", "explain",
+        "insert",
+        "update",
+        "delete",
+        "truncate",
+        "drop",
+        "alter",
+        "create",
+        "grant",
+        "revoke",
+        "merge",
+        "call",
+        "do",
+        "copy",
+        "vacuum",
+        "analyze",
+        "reindex",
+        "cluster",
+        "comment",
+        "lock",
+        "set",
+        "reset",
+        "begin",
+        "commit",
+        "rollback",
+        "savepoint",
+        "prepare",
+        "execute",
+        "explain",
     }
 )
 

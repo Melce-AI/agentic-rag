@@ -1,19 +1,29 @@
 import logging
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http.models import (
-    Distance, VectorParams, SparseVectorParams, PointStruct, 
-    SparseVector, PayloadSchemaType, Prefetch, FusionQuery, Fusion,
-    Filter, FieldCondition, MatchValue
+    Distance,
+    VectorParams,
+    SparseVectorParams,
+    PointStruct,
+    SparseVector,
+    PayloadSchemaType,
+    Prefetch,
+    FusionQuery,
+    Fusion,
+    Filter,
+    FieldCondition,
+    MatchValue,
 )
 from src.core.config import get_settings
 from src.core.exceptions import (
     VectorStoreInitializationError,
-    VectorStoreOperationError
+    VectorStoreOperationError,
 )
 from src.observability.tracing import traced
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
 
 class QdrantManager:
     """
@@ -27,7 +37,7 @@ class QdrantManager:
             port=settings.qdrant_port,
             api_key=settings.qdrant_api_key,
             grpc_port=settings.qdrant_grpc_port,
-            prefer_grpc=False
+            prefer_grpc=False,
         )
         self.collection_name = settings.qdrant_collection_name
         self.dense_vector_name = "dense-text"
@@ -40,9 +50,11 @@ class QdrantManager:
         """
         try:
             exists = await self.client.collection_exists(self.collection_name)
-            
+
             if not exists:
-                logger.info(f"Creating collection '{self.collection_name}' with Hybrid Search config...")
+                logger.info(
+                    f"Creating collection '{self.collection_name}' with Hybrid Search config..."
+                )
                 await self.client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config={
@@ -53,30 +65,41 @@ class QdrantManager:
                     },
                     sparse_vectors_config={
                         self.sparse_vector_name: SparseVectorParams()
-                    }
+                    },
                 )
                 logger.info(f"Collection '{self.collection_name}' created.")
             else:
-                logger.info(f"Validating existing collection '{self.collection_name}'...")
+                logger.info(
+                    f"Validating existing collection '{self.collection_name}'..."
+                )
                 info = await self.client.get_collection(self.collection_name)
                 params = info.config.params
-                
+
                 # Validation Logic
                 if not params.vectors or self.dense_vector_name not in params.vectors:
-                    raise ValueError(f"Missing dense vector config for '{self.dense_vector_name}'")
-                
+                    raise ValueError(
+                        f"Missing dense vector config for '{self.dense_vector_name}'"
+                    )
+
                 dense_cfg = params.vectors[self.dense_vector_name]
                 if dense_cfg.size != settings.qdrant_vector_size:
-                    raise ValueError(f"Vector size mismatch: expected {settings.qdrant_vector_size}, got {dense_cfg.size}")
+                    raise ValueError(
+                        f"Vector size mismatch: expected {settings.qdrant_vector_size}, got {dense_cfg.size}"
+                    )
 
-                if not params.sparse_vectors or self.sparse_vector_name not in params.sparse_vectors:
-                    raise ValueError(f"Missing sparse vector config for '{self.sparse_vector_name}'")
-                
+                if (
+                    not params.sparse_vectors
+                    or self.sparse_vector_name not in params.sparse_vectors
+                ):
+                    raise ValueError(
+                        f"Missing sparse vector config for '{self.sparse_vector_name}'"
+                    )
+
                 logger.info(f"Collection '{self.collection_name}' validated.")
 
             # Always ensure payload indexes for performance
             await self._ensure_payload_indexes()
-                
+
         except Exception as e:
             logger.error(f"Failed to initialize Qdrant: {str(e)}")
             raise VectorStoreInitializationError(details={"error": str(e)})
@@ -90,19 +113,26 @@ class QdrantManager:
             "document_id": PayloadSchemaType.KEYWORD,
             "created_at": PayloadSchemaType.DATETIME,
         }
-        
+
         for field, schema_type in indexed_fields.items():
             try:
                 await self.client.create_payload_index(
                     collection_name=self.collection_name,
                     field_name=field,
-                    field_schema=schema_type
+                    field_schema=schema_type,
                 )
             except Exception as e:
                 # Often occurs if index already exists, which is fine
                 logger.debug(f"Payload index for '{field}' skip/fail: {str(e)}")
 
-    async def upsert_document(self, doc_id: str, dense_vector: list[float], sparse_indices: list[int], sparse_values: list[float], payload: dict):
+    async def upsert_document(
+        self,
+        doc_id: str,
+        dense_vector: list[float],
+        sparse_indices: list[int],
+        sparse_values: list[float],
+        payload: dict,
+    ):
         """
         Standardized document insertion for Hybrid Search.
         """
@@ -154,7 +184,11 @@ class QdrantManager:
             message = str(e) or repr(e) or type(e).__name__
             raise VectorStoreOperationError(
                 operation="upsert",
-                details={"error": message, "point_count": len(points), "batch_size": batch_size},
+                details={
+                    "error": message,
+                    "point_count": len(points),
+                    "batch_size": batch_size,
+                },
             ) from e
 
     @traced("qdrant.hybrid_search")
@@ -189,7 +223,9 @@ class QdrantManager:
                         limit=limit,
                     ),
                     Prefetch(
-                        query=SparseVector(indices=sparse_indices, values=sparse_values),
+                        query=SparseVector(
+                            indices=sparse_indices, values=sparse_values
+                        ),
                         using=self.sparse_vector_name,
                         limit=limit,
                     ),
@@ -202,7 +238,9 @@ class QdrantManager:
             )
             return response.points
         except Exception as e:
-            raise VectorStoreOperationError(operation="hybrid_search", details={"error": str(e)})
+            raise VectorStoreOperationError(
+                operation="hybrid_search", details={"error": str(e)}
+            )
 
     async def hybrid_search(
         self,
@@ -242,7 +280,9 @@ class QdrantManager:
                 ),
             )
         except Exception as e:
-            raise VectorStoreOperationError(operation="delete_by_document_id", details={"error": str(e)})
+            raise VectorStoreOperationError(
+                operation="delete_by_document_id", details={"error": str(e)}
+            )
 
     async def list_documents_by_tenant(self, *, tenant_id: str) -> list[dict]:
         """
@@ -291,7 +331,9 @@ class QdrantManager:
                     summary["chunk_count"] += 1
 
                     created_at = payload.get("created_at", "")
-                    if created_at and (not summary["created_at"] or created_at < summary["created_at"]):
+                    if created_at and (
+                        not summary["created_at"] or created_at < summary["created_at"]
+                    ):
                         summary["created_at"] = created_at
 
                 if offset is None:
@@ -299,11 +341,17 @@ class QdrantManager:
 
             return sorted(
                 documents.values(),
-                key=lambda document: (document["created_at"], document["source_name"], document["document_id"]),
+                key=lambda document: (
+                    document["created_at"],
+                    document["source_name"],
+                    document["document_id"],
+                ),
                 reverse=True,
             )
         except Exception as e:
-            raise VectorStoreOperationError(operation="list_documents_by_tenant", details={"error": str(e)})
+            raise VectorStoreOperationError(
+                operation="list_documents_by_tenant", details={"error": str(e)}
+            )
 
     async def health_check(self) -> dict:
         """
@@ -313,26 +361,24 @@ class QdrantManager:
             # Check basic connection
             # We use a simple lightweight check
             collections = await self.client.get_collections()
-            
+
             # Check target collection
             exists = await self.client.collection_exists(self.collection_name)
-            
+
             return {
                 "status": "healthy" if exists else "degraded",
                 "connection": "ok",
                 "collection_found": exists,
                 "collection_name": self.collection_name,
-                "total_collections": len(collections.collections)
+                "total_collections": len(collections.collections),
             }
         except Exception as e:
-            return {
-                "status": "unhealthy",
-                "error": str(e)
-            }
+            return {"status": "unhealthy", "error": str(e)}
 
     async def close(self):
         """Closes the client connection."""
         await self.client.close()
+
 
 # Singleton instance for easy access across the app
 qdrant_manager = QdrantManager()

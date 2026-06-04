@@ -94,7 +94,9 @@ class DocumentIngestService:
 
             records = []
             for chunk, embedding in zip(chunks, embeddings):
-                chunk_id = self._stable_uuid(f"{document_id}:{content_hash}:{chunk.chunk_index}")
+                chunk_id = self._stable_uuid(
+                    f"{document_id}:{content_hash}:{chunk.chunk_index}"
+                )
                 stored_chunk = Chunk(
                     chunk_id=chunk_id,
                     document_id=document.document_id,
@@ -146,7 +148,11 @@ class DocumentIngestService:
             raise
         except Exception as exc:
             raise RagIngestError(
-                details={"source_name": source_name, "tenant_id": tenant_id, "error": str(exc)}
+                details={
+                    "source_name": source_name,
+                    "tenant_id": tenant_id,
+                    "error": str(exc),
+                }
             ) from exc
 
     async def list_documents(self, *, tenant_id: str, limit: int = 100) -> dict:
@@ -156,7 +162,9 @@ class DocumentIngestService:
             raise RagValidationError("limit must be greater than 0")
 
         try:
-            documents = await self.vector_store.list_documents_by_tenant(tenant_id=tenant_id)
+            documents = await self.vector_store.list_documents_by_tenant(
+                tenant_id=tenant_id
+            )
             limited_documents = documents[:limit]
             return {
                 "documents": limited_documents,
@@ -165,7 +173,9 @@ class DocumentIngestService:
         except AppException:
             raise
         except Exception as exc:
-            raise DocumentListError(details={"tenant_id": tenant_id, "error": str(exc)}) from exc
+            raise DocumentListError(
+                details={"tenant_id": tenant_id, "error": str(exc)}
+            ) from exc
 
     async def delete_document(self, *, document_id: str, tenant_id: str) -> dict:
         if not document_id.strip():
@@ -187,7 +197,11 @@ class DocumentIngestService:
             raise
         except Exception as exc:
             raise DocumentDeleteError(
-                details={"document_id": document_id, "tenant_id": tenant_id, "error": str(exc)}
+                details={
+                    "document_id": document_id,
+                    "tenant_id": tenant_id,
+                    "error": str(exc),
+                }
             ) from exc
 
     @staticmethod

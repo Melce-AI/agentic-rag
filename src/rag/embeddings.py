@@ -50,8 +50,13 @@ class FastEmbedProvider:
         span.set_attribute("embedding.model_name", self.dense_model_name)
         try:
             self._validate_texts(texts)
-            dense_vectors = [self._as_float_list(vector) for vector in self.dense_model.embed(texts)]
-            sparse_vectors = [self._to_sparse_embedding(vector) for vector in self.sparse_model.embed(texts)]
+            dense_vectors = [
+                self._as_float_list(vector) for vector in self.dense_model.embed(texts)
+            ]
+            sparse_vectors = [
+                self._to_sparse_embedding(vector)
+                for vector in self.sparse_model.embed(texts)
+            ]
             self._validate_embedding_counts(
                 expected_count=len(texts),
                 dense_count=len(dense_vectors),
@@ -97,7 +102,9 @@ class FastEmbedProvider:
             try:
                 from fastembed import SparseTextEmbedding
 
-                self._sparse_model = SparseTextEmbedding(model_name=self.sparse_model_name)
+                self._sparse_model = SparseTextEmbedding(
+                    model_name=self.sparse_model_name
+                )
             except Exception as exc:
                 raise RagEmbeddingError(
                     details={"model": self.sparse_model_name, "error": str(exc)}
@@ -128,7 +135,10 @@ class FastEmbedProvider:
         for index, text in enumerate(texts):
             if not text.strip():
                 raise RagEmbeddingError(
-                    details={"error": "embedding input text must not be blank", "index": index}
+                    details={
+                        "error": "embedding input text must not be blank",
+                        "index": index,
+                    }
                 )
 
     @staticmethod

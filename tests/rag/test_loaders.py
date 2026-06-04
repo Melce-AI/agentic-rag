@@ -60,7 +60,12 @@ def test_load_document_rejects_unsupported_extensions():
         load_document(source_name="data.xlsx", raw_content=b"content")
 
     assert exc_info.value.code == "RAG_422"
-    assert exc_info.value.details["supported_extensions"] == [".csv", ".md", ".pdf", ".txt"]
+    assert exc_info.value.details["supported_extensions"] == [
+        ".csv",
+        ".md",
+        ".pdf",
+        ".txt",
+    ]
 
 
 def test_load_document_rejects_non_utf8_content():
