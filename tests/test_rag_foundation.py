@@ -156,7 +156,9 @@ def test_plain_text_chunks_predictably_without_headings() -> None:
 def test_heading_aware_chunking_respects_token_budget_with_heading_context() -> None:
     chunker = HeadingAwareChunker(max_tokens=25, overlap_tokens=5)
 
-    chunks = chunker.split("# Policy\n## Access\n" + ("alpha beta gamma delta epsilon. " * 12))
+    chunks = chunker.split(
+        "# Policy\n## Access\n" + ("alpha beta gamma delta epsilon. " * 12)
+    )
 
     assert len(chunks) > 1
     assert all(chunk.heading_path == ["Policy", "Access"] for chunk in chunks)
@@ -231,10 +233,18 @@ def test_ingest_service_deletes_document_by_tenant_boundary() -> None:
         chunker=HeadingAwareChunker(max_tokens=60, overlap_tokens=5),
     )
 
-    result = asyncio.run(service.delete_document(document_id="doc-1", tenant_id="default"))
+    result = asyncio.run(
+        service.delete_document(document_id="doc-1", tenant_id="default")
+    )
 
-    assert result == {"document_id": "doc-1", "tenant_id": "default", "status": "deleted"}
-    assert vector_store.deleted_documents == [{"document_id": "doc-1", "tenant_id": "default"}]
+    assert result == {
+        "document_id": "doc-1",
+        "tenant_id": "default",
+        "status": "deleted",
+    }
+    assert vector_store.deleted_documents == [
+        {"document_id": "doc-1", "tenant_id": "default"}
+    ]
 
 
 def test_ingest_service_lists_documents_with_limit() -> None:
@@ -260,7 +270,9 @@ def test_retriever_calls_hybrid_search_and_maps_results() -> None:
         reranker=FakeReranker(),
     )
 
-    results = asyncio.run(retriever.search(query="access policy", tenant_id="default", top_k=1))
+    results = asyncio.run(
+        retriever.search(query="access policy", tenant_id="default", top_k=1)
+    )
 
     assert vector_store.search_calls[0]["dense_vector"] == [0.5, 0.1, 0.2]
     assert vector_store.search_calls[0]["sparse_indices"] == [7]
@@ -282,7 +294,9 @@ def test_retriever_preserves_app_exceptions() -> None:
     )
 
     try:
-        asyncio.run(retriever.search(query="access policy", tenant_id="default", top_k=1))
+        asyncio.run(
+            retriever.search(query="access policy", tenant_id="default", top_k=1)
+        )
     except RagEmbeddingError as exc:
         assert exc.code == "RAG_EMBED_500"
     else:
@@ -294,9 +308,18 @@ def test_retriever_reranks_candidates_before_top_k() -> None:
         async def query_hybrid(self, **kwargs):
             _ = kwargs
             return [
-                {"score": 0.9, "payload": {"chunk_id": "a", "document_id": "d", "text": "alpha"}},
-                {"score": 0.5, "payload": {"chunk_id": "b", "document_id": "d", "text": "beta"}},
-                {"score": 0.7, "payload": {"chunk_id": "c", "document_id": "d", "text": "gamma"}},
+                {
+                    "score": 0.9,
+                    "payload": {"chunk_id": "a", "document_id": "d", "text": "alpha"},
+                },
+                {
+                    "score": 0.5,
+                    "payload": {"chunk_id": "b", "document_id": "d", "text": "beta"},
+                },
+                {
+                    "score": 0.7,
+                    "payload": {"chunk_id": "c", "document_id": "d", "text": "gamma"},
+                },
             ]
 
     # Reranker promotes 'b' (the lowest retrieval score) to the top.
@@ -339,7 +362,9 @@ def test_retriever_top_k_sorting_is_deterministic() -> None:
         RetrievedChunk("c", "doc-3", "c.md", [], "third", 0.1),
     ]
 
-    sorted_results = sorted(results, key=lambda item: (-item.score, item.document_id, item.chunk_id))[:2]
+    sorted_results = sorted(
+        results, key=lambda item: (-item.score, item.document_id, item.chunk_id)
+    )[:2]
 
     assert [result.chunk_id for result in sorted_results] == ["a", "b"]
 
@@ -350,18 +375,28 @@ def test_ingest_endpoint_returns_ingest_result(monkeypatch) -> None:
             assert kwargs["tenant_id"] == "default"
             return {"document_id": "doc-1", "chunk_count": 2, "status": "ingested"}
 
-    monkeypatch.setattr(documents_router, "document_ingest_service", FakeIngestService())
+    monkeypatch.setattr(
+        documents_router, "document_ingest_service", FakeIngestService()
+    )
 
     client = TestClient(app, raise_server_exceptions=False)
     response = client.post(
         "/documents/ingest",
-        json={"source_name": "policy.md", "content": "# Policy\nText", "tenant_id": "default"},
+        json={
+            "source_name": "policy.md",
+            "content": "# Policy\nText",
+            "tenant_id": "default",
+        },
     )
 
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
-    assert body["data"] == {"document_id": "doc-1", "chunk_count": 2, "status": "ingested"}
+    assert body["data"] == {
+        "document_id": "doc-1",
+        "chunk_count": 2,
+        "status": "ingested",
+    }
     assert body["request_id"]
 
 
@@ -383,7 +418,9 @@ def test_list_documents_endpoint_returns_document_summaries(monkeypatch) -> None
                 "count": 1,
             }
 
-    monkeypatch.setattr(documents_router, "document_ingest_service", FakeIngestService())
+    monkeypatch.setattr(
+        documents_router, "document_ingest_service", FakeIngestService()
+    )
 
     client = TestClient(app, raise_server_exceptions=False)
     response = client.get("/documents", params={"tenant_id": "default", "limit": 10})
@@ -402,7 +439,9 @@ def test_delete_document_endpoint_returns_delete_result(monkeypatch) -> None:
             assert kwargs == {"document_id": "doc-1", "tenant_id": "default"}
             return {"document_id": "doc-1", "tenant_id": "default", "status": "deleted"}
 
-    monkeypatch.setattr(documents_router, "document_ingest_service", FakeIngestService())
+    monkeypatch.setattr(
+        documents_router, "document_ingest_service", FakeIngestService()
+    )
 
     client = TestClient(app, raise_server_exceptions=False)
     response = client.delete("/documents/doc-1", params={"tenant_id": "default"})
@@ -410,7 +449,11 @@ def test_delete_document_endpoint_returns_delete_result(monkeypatch) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
-    assert body["data"] == {"document_id": "doc-1", "tenant_id": "default", "status": "deleted"}
+    assert body["data"] == {
+        "document_id": "doc-1",
+        "tenant_id": "default",
+        "status": "deleted",
+    }
     assert body["request_id"]
 
 
@@ -433,7 +476,9 @@ def test_search_endpoint_returns_normalized_results(monkeypatch) -> None:
     monkeypatch.setattr(search_router, "hybrid_retriever", FakeRetriever())
 
     client = TestClient(app, raise_server_exceptions=False)
-    response = client.post("/search", json={"query": "access", "tenant_id": "default", "top_k": 1})
+    response = client.post(
+        "/search", json={"query": "access", "tenant_id": "default", "top_k": 1}
+    )
 
     assert response.status_code == 200
     body = response.json()

@@ -13,6 +13,7 @@ from src.core.config import get_settings
 
 class QueueHandlerInit:
     """Ensures that the QueueListener for the QueueHandler is started exactly once, even in reload/multi-import scenarios."""
+
     _started = False
 
     def __init__(self, handler_name: str = "queue_handler") -> None:
@@ -52,11 +53,12 @@ class CustomQueueHandler(logging.handlers.QueueHandler):
 
 class CustomJSONFormatter(logging.Formatter):
     """Custom JSON formatter that converts log records into structured JSON format."""
+
     def __init__(
-            self,
-            *,
-            fmt_keys: dict[str, str] | None = None,
-            builtin_attrs: list[str] | None = None,
+        self,
+        *,
+        fmt_keys: dict[str, str] | None = None,
+        builtin_attrs: list[str] | None = None,
     ):
         super().__init__()
         self.fmt_keys = fmt_keys if fmt_keys is not None else {}
@@ -66,11 +68,13 @@ class CustomJSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         message = self._prepare_log_dict(record)
         return json.dumps(message, default=str)
-    
+
     def _prepare_log_dict(self, record: logging.LogRecord) -> dict:
         always_fields = {
             "message": record.getMessage(),
-            "timestamp": dt.datetime.fromtimestamp(record.created, tz=dt.timezone.utc).isoformat(),
+            "timestamp": dt.datetime.fromtimestamp(
+                record.created, tz=dt.timezone.utc
+            ).isoformat(),
         }
         if record.exc_info is not None:
             always_fields["exc_info"] = self.formatException(record.exc_info)
@@ -95,6 +99,7 @@ class CustomJSONFormatter(logging.Formatter):
 
 class NonErrorFilter(logging.Filter):
     """Logging filter that allows only log records with level INFO or below (DEBUG, INFO) to pass through."""
+
     @override
     def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
         # Only allow log records with level INFO or below (DEBUG, INFO) to pass through this filter
@@ -109,7 +114,7 @@ def _resolve_log_level(level_name: str) -> str:
 
 def setup_logging() -> None:
     """Initialize logging with dynamic terminal levels and persistent file logging.
-    
+
     Features:
     - Terminal handler levels controlled by Settings.log_level (dynamic).
     - File log handler follows log_level dynamically. Useful for checking what your LOG_LEVEL actually captures.
@@ -117,10 +122,10 @@ def setup_logging() -> None:
     - Hierarchical loggers: src.api, src.core, src.adapters, src.rag etc. can be configured independently.
     - Non-blocking I/O via QueueHandler + QueueListener.
     - stdout/stderr separation: INFO and below go to stdout, WARNING+ to stderr.
-    
+
     Logger hierarchy example:
         logger = logging.getLogger(__name__)  # Gets "src.api", "src.adapters", etc.
-        
+
     Configure per-module levels in logging_config.json if needed.
     """
 

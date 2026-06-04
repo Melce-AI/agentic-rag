@@ -15,7 +15,9 @@ def register(mcp: FastMCP) -> None:
     retriever = HybridRetriever()
 
     @mcp.tool()
-    async def rag_search(query: str, tenant_id: str, top_k: int = 5) -> list[MCPSearchResult]:
+    async def rag_search(
+        query: str, tenant_id: str, top_k: int = 5
+    ) -> list[MCPSearchResult]:
         """Search the knowledge base using hybrid dense+sparse retrieval with reranking.
 
         Use this tool to retrieve relevant document chunks for a given question or topic.
@@ -29,7 +31,9 @@ def register(mcp: FastMCP) -> None:
         top_k = max(1, min(top_k, 20))
 
         try:
-            chunks = await retriever.search(query=query, tenant_id=tenant_id, top_k=top_k)
+            chunks = await retriever.search(
+                query=query, tenant_id=tenant_id, top_k=top_k
+            )
         except RagRetrievalError as exc:
             logger.error("rag_search failed: %s", exc)
             raise

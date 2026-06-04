@@ -85,7 +85,9 @@ def test_rag_search_clamps_top_k(monkeypatch, requested, expected):
     mcp, fake = _register_with(monkeypatch, [])
 
     asyncio.run(
-        mcp.call_tool("rag_search", {"query": "q", "tenant_id": "t1", "top_k": requested})
+        mcp.call_tool(
+            "rag_search", {"query": "q", "tenant_id": "t1", "top_k": requested}
+        )
     )
 
     assert fake.calls[0]["top_k"] == expected
