@@ -88,7 +88,9 @@ class HuggingFaceBackend:
     def model_name(self) -> str:
         return self._model
 
-    async def chat(self, messages: list[dict], tools: list[dict]) -> tuple[dict, list[dict]]:
+    async def chat(
+        self, messages: list[dict], tools: list[dict]
+    ) -> tuple[dict, list[dict]]:
         response = await self._client.chat_completion(
             messages=messages,
             tools=tools,
@@ -114,7 +116,11 @@ class HuggingFaceBackend:
                     },
                 }
             )
-        assistant = {"role": "assistant", "content": message.content or "", "tool_calls": tool_calls_payload}
+        assistant = {
+            "role": "assistant",
+            "content": message.content or "",
+            "tool_calls": tool_calls_payload,
+        }
         return assistant, calls
 
     @staticmethod
@@ -135,11 +141,19 @@ class OllamaBackend:
     def model_name(self) -> str:
         return self._model
 
-    async def chat(self, messages: list[dict], tools: list[dict]) -> tuple[dict, list[dict]]:
-        response = await self._client.chat(model=self._model, messages=messages, tools=tools)
+    async def chat(
+        self, messages: list[dict], tools: list[dict]
+    ) -> tuple[dict, list[dict]]:
+        response = await self._client.chat(
+            model=self._model, messages=messages, tools=tools
+        )
         message = response.message
         calls = [
-            {"id": None, "name": tc.function.name, "args": _parse_args(tc.function.arguments)}
+            {
+                "id": None,
+                "name": tc.function.name,
+                "args": _parse_args(tc.function.arguments),
+            }
             for tc in (message.tool_calls or [])
         ]
         assistant = {
@@ -215,7 +229,9 @@ async def run_agent(question: str) -> dict:
                     return {"answer": answer, "steps": steps}
 
                 for call in calls:
-                    with _tracer.start_as_current_span(f"tool.{call['name']}") as tool_span:
+                    with _tracer.start_as_current_span(
+                        f"tool.{call['name']}"
+                    ) as tool_span:
                         tool_span.set_attribute("openinference.span.kind", "TOOL")
                         tool_span.set_attribute("tool.name", call["name"])
                         tool_span.set_attribute(
@@ -225,11 +241,15 @@ async def run_agent(question: str) -> dict:
                         # A tool result can be several content parts (e.g.
                         # list_tables returns one per table) — join them all.
                         text = "\n".join(
-                            part.text for part in (result.content or []) if hasattr(part, "text")
+                            part.text
+                            for part in (result.content or [])
+                            if hasattr(part, "text")
                         )
                         tool_span.set_attribute("output.value", text[:1000])
 
-                    steps.append({"tool": call["name"], "args": call["args"], "result": text})
+                    steps.append(
+                        {"tool": call["name"], "args": call["args"], "result": text}
+                    )
                     messages.append(backend.tool_message(call, text))
 
             agent_span.set_attribute("output.value", "(max steps)")

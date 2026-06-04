@@ -26,9 +26,7 @@ def test_every_chunk_repeats_the_column_schema():
 def test_token_budget_packs_whole_rows_without_splitting_records():
     chunker = TableChunker(max_tokens=25)
 
-    chunks = chunker.split(
-        "name,role\nAyse,admin\nMehmet,viewer\nFatma,editor\n"
-    )
+    chunks = chunker.split("name,role\nAyse,admin\nMehmet,viewer\nFatma,editor\n")
 
     # Records are atomic: a row never appears split across two chunks.
     assert len(chunks) > 1

@@ -20,11 +20,13 @@ def setup_tracing() -> None:
         logger.info("OpenTelemetry tracing is disabled.")
         return
 
-    resource = Resource.create({
-        "service.name": settings.otel_service_name,
-        "service.version": settings.version,
-        "deployment.environment": settings.environment,
-    })
+    resource = Resource.create(
+        {
+            "service.name": settings.otel_service_name,
+            "service.version": settings.version,
+            "deployment.environment": settings.environment,
+        }
+    )
     provider = TracerProvider(resource=resource)
     exporter = OTLPSpanExporter(
         endpoint=f"{settings.otel_exporter_otlp_endpoint}/v1/traces",
@@ -43,6 +45,7 @@ def get_tracer(name: str) -> trace.Tracer:
 
 def traced(span_name: str, span_kind: str | None = None):
     """Wraps an async or sync method in a span. Errors are recorded automatically."""
+
     def decorator(fn):
         tracer = get_tracer(fn.__module__)
 
@@ -75,4 +78,5 @@ def traced(span_name: str, span_kind: str | None = None):
                     raise
 
         return async_wrapper if asyncio.iscoroutinefunction(fn) else sync_wrapper
+
     return decorator

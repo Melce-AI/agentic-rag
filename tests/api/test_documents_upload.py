@@ -11,7 +11,9 @@ class _FakeDocumentIngestService:
     def __init__(self) -> None:
         self.calls = []
 
-    async def ingest_document(self, *, source_name: str, content: str, tenant_id: str, content_kind: str):
+    async def ingest_document(
+        self, *, source_name: str, content: str, tenant_id: str, content_kind: str
+    ):
         self.calls.append(
             {
                 "source_name": source_name,
