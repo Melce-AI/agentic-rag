@@ -162,6 +162,7 @@ appropriate page so future sessions build on synthesized knowledge.
 - `docs/team_notes/` — FastAPI architecture, API design, dockerization, logging
 - `docs/qdrant/` — Qdrant deep dive, hybrid search setup, metrics
 - `docs/api/`, `docs/docker/` — standards and baseline analyses
+- `docs/observability/tracing.md` — OTel concepts, OTLP, OpenInference span kinds, `@traced` decorator, attribute conventions
 
 ## Commits
 
