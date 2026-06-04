@@ -8,3 +8,15 @@ tests
 .env
 .pytest_cache
 .coverage
+
+# Build context'e girmesi gerekmeyen dizinler
+docs/
+logs/
+infra/
+.cache/
+data/
+tmp/
+
+# Markdown / metin dosyaları
+*.md
+*.txt
