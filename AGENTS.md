@@ -159,6 +159,14 @@ appropriate page so future sessions build on synthesized knowledge.
 
 - `docs/architecture.md` — target architecture and decision rationale (canonical)
 - `docs/local_notes/VIZYON 1.md` — product vision and 5-step roadmap
+- `docs/agents/langgraph_guide.md` — LangGraph multi-agent layer: StateGraph,
+  conditional edges, state/nodes/tools/checkpointer, plus the `schemas/` and
+  `core/` additions Step 3 requires (teaching guide)
+- `docs/agents/langchain_features.md` — LangChain feature guide: ecosystem,
+  skills (Deep Agents `SKILL.md` + progressive disclosure via `SkillsMiddleware`),
+  chat models, messages, tools, `create_agent`, middleware (deep dive: hooks,
+  built-ins, HITL), structured output, streaming, observability — with industry
+  standards and how each maps to this project (teaching guide)
 - `docs/team_notes/` — FastAPI architecture, API design, dockerization, logging
 - `docs/qdrant/` — Qdrant deep dive, hybrid search setup, metrics
 - `docs/api/`, `docs/docker/` — standards and baseline analyses
