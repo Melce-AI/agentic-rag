@@ -164,9 +164,13 @@ appropriate page so future sessions build on synthesized knowledge.
   `core/` additions Step 3 requires (teaching guide)
 - `docs/agents/langchain_features.md` — LangChain feature guide: ecosystem,
   skills (Deep Agents `SKILL.md` + progressive disclosure via `SkillsMiddleware`),
-  chat models, messages, tools, `create_agent`, middleware (deep dive: hooks,
-  built-ins, HITL), structured output, streaming, observability — with industry
-  standards and how each maps to this project (teaching guide)
+  chat models, messages, tools, `create_agent`, Deep Agents harness
+  (`create_deep_agent`: execution env, context mgmt, delegation/subagents,
+  steering, profiles), middleware (deep dive: hooks, full built-in catalog, HITL
+  with decision types + conditional interrupts, embedding agents as StateGraph
+  nodes, guardrails, context engineering: Model/Tool/Life-cycle context and
+  Runtime/State/Store data sources), structured output, streaming, observability
+  — with industry standards and how each maps to this project (teaching guide)
 - `docs/team_notes/` — FastAPI architecture, API design, dockerization, logging
 - `docs/qdrant/` — Qdrant deep dive, hybrid search setup, metrics
 - `docs/api/`, `docs/docker/` — standards and baseline analyses
