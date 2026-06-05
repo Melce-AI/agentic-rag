@@ -110,9 +110,91 @@ Researcher/Analyst bu skill'i sadece denetim görevinde okur. Tool'ların (MCP)
 > *prosedür/uzmanlık = skill*, *her tura uygulanan politika = middleware*
 > (skill'in kendisi de bir middleware ile gelir), *orkestrasyon = graph/agent*.
 
+### 0.1 Tam spesifikasyon (Agent Skills spec — referans)
+
+Yukarısı kavramdı; aşağısı **resmi format** (kurmak isteyince birebir bu kurallara
+uyacaksın).
+
+**Dizin yapısı** — bir skill, en azından bir `SKILL.md` içeren bir klasördür:
+
+```
+skill-name/
+├── SKILL.md          # Zorunlu: metadata + talimatlar
+├── scripts/          # Opsiyonel: çalıştırılabilir kod
+├── references/       # Opsiyonel: detaylı dokümantasyon
+├── assets/           # Opsiyonel: template, görsel, veri dosyası
+└── ...               # Ek dosya/klasörler
+```
+
+**Frontmatter alanları (kısıtlarıyla):**
+
+| Alan | Zorunlu | Kısıt |
+|------|---------|-------|
+| `name` | Evet | Max 64 karakter; sadece küçük harf + rakam + tire; başta/sonda tire olamaz; ardışık `--` olamaz; **klasör adıyla eşleşmeli** |
+| `description` | Evet | Max 1024 karakter, boş olamaz; "ne yapar **ve ne zaman** kullanılır" + ajanın eşleştireceği anahtar kelimeler |
+| `license` | Hayır | Lisans adı veya pakete dahil lisans dosyası referansı (kısa tut) |
+| `compatibility` | Hayır | Max 500 karakter; ortam gereksinimleri (hedef ürün, sistem paketleri, ağ erişimi). Çoğu skill'e gerekmez |
+| `metadata` | Hayır | Serbest string→string map; anahtar adlarını çakışmayı önlemek için özgün tut |
+| `allowed-tools` | Hayır | Önceden onaylı tool'lar, boşlukla ayrık string (**deneysel**, ajan implementasyonuna göre değişir) |
+
+`name` örnekleri: ✅ `pdf-processing`, `data-analysis` · ❌ `PDF-Processing`
+(büyük harf), `-pdf` (tire ile başlıyor), `pdf--processing` (ardışık tire).
+
+`description` — iyi vs kötü:
+- ✅ *"Extracts text and tables from PDF files, fills PDF forms, and merges PDFs.
+  Use when working with PDF documents or when the user mentions PDFs, forms, or
+  document extraction."*
+- ❌ *"Helps with PDFs."* (ne zaman aktifleşeceği belirsiz → ajan seçemez)
+
+`allowed-tools` örneği: `Bash(git:*) Bash(jq:*) Read`
+
+**Gövde (body):** Frontmatter'dan sonraki markdown serbesttir. Önerilen bölümler:
+adım adım talimatlar, girdi/çıktı örnekleri, sık uç durumlar (edge cases). Ajan
+skill'i aktive edince **tüm gövdeyi** yükler → uzun içeriği ayrı dosyalara böl.
+
+**Opsiyonel klasörler:**
+- `scripts/` — ajanın çalıştırabileceği kod (Python/Bash/JS); kendi kendine
+  yeten, hata mesajlı, uç durumları ele alan.
+- `references/` — gerektiğinde okunan detaylı dokümantasyon (`REFERENCE.md`,
+  `FORMS.md`, alana özel `finance.md` vb.). Küçük tut → daha az context.
+- `assets/` — statik kaynaklar (template, görsel, lookup tablosu, şema).
+
+**Progressive disclosure — token bütçeleri (somut sayılar):**
+
+| Katman | Ne yüklenir | Bütçe |
+|--------|-------------|-------|
+| 1. Metadata | `name` + `description` (başlangıçta, **tüm** skill'ler için) | ~100 token |
+| 2. Instructions | `SKILL.md` gövdesi (skill aktive olunca) | önerilen < 5000 token |
+| 3. Resources | `scripts/`, `references/`, `assets/` dosyaları | sadece gerektiğinde |
+
+Pratik kural: `SKILL.md`'yi **500 satırın altında** tut; detayı ayrı dosyalara taşı.
+
+**Dosya referansları:** Skill kökünden **göreli yol** kullan, **bir seviye
+derinlikte** tut (derin zincir kurma):
+
+```markdown
+See [the reference guide](references/REFERENCE.md) for details.
+Run the extraction script: scripts/extract.py
+```
+
+**Doğrulama (validation):** `skills-ref` referans kütüphanesiyle frontmatter ve
+isim kurallarını kontrol et:
+
+```bash
+skills-ref validate ./my-skill
+```
+
+> **Bu repoya bağ:** Bu spec'in `name` + `description` + progressive disclosure
+> kuralları, bu projedeki **memory** sistemiyle (`MEMORY.md` indeksi + frontmatter'lı
+> tek-konu dosyalar) ve Claude Code skill'leriyle birebir aynı felsefedir:
+> *önce hafif metadata, gerekince ağır içerik.* Sentinel'e bir skill yazarsan
+> (örn. `sql-audit-report/SKILL.md`), `description`'a denetim anahtar kelimelerini
+> koy ki Auditor doğru anda aktive etsin.
+
 Kaynaklar:
 [Skills — LangChain Docs](https://docs.langchain.com/oss/python/deepagents/skills) ·
-[Using skills with Deep Agents — LangChain Blog](https://www.langchain.com/blog/using-skills-with-deep-agents)
+[Using skills with Deep Agents — LangChain Blog](https://www.langchain.com/blog/using-skills-with-deep-agents) ·
+[Agent Skills Specification — agentskills.io](https://agentskills.io/llms.txt)
 
 ---
 
@@ -273,6 +355,83 @@ result = agent.invoke({"messages": [HumanMessage("...")]})
 düğümleri (örn. Researcher) bir `create_agent` olarak gömebilirsin. İkisi aynı
 motor olduğu için iç içe geçer.
 
+### 5.1 Deep Agents "harness" — üretim çatısı (`create_deep_agent`)
+
+**Harness nedir:** Modelin **etrafındaki iskele**. `create_agent` sana ham bir
+döngü verir; **Deep Agents** ise uzun süre çalışan, güvenilir ajanlar için
+gereken üretim yeteneklerini hazır paketler. `create_deep_agent(...)` ile gelir
+ve **dört kategoriden** oluşur (+ harness profiles):
+
+```python
+from deepagents import create_deep_agent
+agent = create_deep_agent(
+    model="anthropic:claude-sonnet-4-6",
+    tools=[...],
+    skills=["/skills/"],
+    interrupt_on={"sql_query": True},   # HITL
+    memory=["AGENTS.md"],
+)
+```
+
+**1) Execution environment (yürütme ortamı) — ajan nerede iş yapar:**
+
+| Katman | Ne sağlar | Bağ |
+|--------|-----------|-----|
+| **Tools** | domain eylemleri (DB, API, fonksiyon) | bölüm 4 — senin MCP tool'ların |
+| **Virtual filesystem** | `ls`/`read_file`/`write_file`/`edit_file`/`glob`/`grep` (+ multimodal okuma) | skill/memory/context bunun üstünde çalışır |
+| **Filesystem permissions** | hangi path okunur/yazılır — deklaratif, ilk-eşleşen kazanır | `.env`/credential koru, subagent'a dar yetki |
+| **Code execution** | sandbox (`execute` shell) veya interpreter (`eval`, QuickJS JS) | deterministik hesap/araç çağrısı |
+
+**2) Context management (bağlam yönetimi) — ajan ne bilir, ne hatırlar:**
+
+| Katman | Davranış |
+|--------|----------|
+| **Skills** | progressive disclosure — sadece gerekince yüklenir (bkz. bölüm 0) |
+| **Memory** | `AGENTS.md` dosyaları — **her zaman** yüklenir (skill'in tersi: progressive değil) |
+| **Summarization + offloading** | konuşma/uzun tool sonuçları otomatik sıkıştırılır → context taşmaz |
+| **Prompt caching** | sistem prompt'unun statik kısımları (talimat, memory, skill) cache'lenir → Anthropic'te **varsayılan açık**, gecikme+maliyet düşer |
+
+> **Kritik ayrım — Skill vs Memory:** İkisi de dosya tabanlı ama zıt yüklenir.
+> **Memory** (`AGENTS.md`) = "her zaman geçerli kurallar" → baştan yüklenir.
+> **Skill** (`SKILL.md`) = "duruma özel prosedür" → sadece gerekince. Bu repodaki
+> `AGENTS.md` zaten tam bu "memory" rolünde; Deep Agents bunu standart kabul
+> ediyor (agents.md spec).
+
+**3) Delegation (yetki devri) — büyük işi böl:**
+
+| Katman | Ne yapar |
+|--------|----------|
+| **Task planning** | `write_todos` tool'u — yapılacakları statülerle (`pending`/`in_progress`/`completed`) izler |
+| **Subagents** | `task` tool'u ile **geçici çocuk ajan** doğurur: kendi context'i, kendi tool'ları, paralel çalışır, sonunda **tek bir rapor** döner |
+
+Subagent'ın değeri: ağır işi **izole** eder (ana ajanın context'ini kirletmez) →
+token verimliliği + paralellik + uzmanlaşma. Senin Researcher/Analyst/Auditor
+ayrımının Deep Agents karşılığı bir nevi budur.
+
+**4) Steering (yönlendirme) — insan kontrolü:**
+`interrupt_on={"tool_adı": True}` ile kritik tool çağrısında durur, insan onayı
+bekler. Bu, bölüm 6.6'da uçtan uca anlattığım **HITL**'in Deep Agents'taki hazır
+arayüzüdür (altında yine `interrupt()` + checkpointer).
+
+**Harness profiles:** Model başına yapılandırmayı (`HarnessProfile`) yeniden
+kullanılabilir paket yapar. Bir provider/model seçilince otomatik uygulanır →
+modeli değiştirince `create_deep_agent` çağrını **değiştirmezsin**. (Provider
+soyutlaması felsefesinin — bölüm 2 — harness seviyesindeki hali.)
+
+**`create_agent` vs `create_deep_agent` — hangisi?**
+
+| İhtiyaç | Kullan |
+|---------|--------|
+| Basit "düşün→tool→cevapla" döngüsü | `create_agent` |
+| Dosya sistemi, subagent, skill, plan, sandbox isteyen uzun görev | `create_deep_agent` |
+| Tam özel döngü/çok-ajan yönlendirme (Auditor↔Researcher) | ham `StateGraph` |
+
+**Senin projene değer katacak parçalar:** `interrupt_on` (kritik SQL onayı —
+Adım 4), `skills` (denetim prosedürleri), `write_todos` (çok adımlı denetim
+planı), prompt caching (maliyet). Subagent/sandbox ise muhtemelen şimdilik
+**gereğinden fazla** — `StateGraph`'le kuracağın 3-ajan döngüsü senin ölçeğin
+için yeterli. Deep Agents'ı "ne zaman lazım olursa o zaman" diye akılda tut.
+
 ---
 
 ## 6. Middleware — derinlemesine (bu dokümanın merkezi)
@@ -323,37 +482,60 @@ eklemek — tıpkı logging/auth middleware'inin route handler'ı kirletmemesi g
 - **Wrap-style** (`wrap_model_call`/`wrap_tool_call`): çağrıyı sarar; `handler`'ı
   sen çağırırsın, böylece **öncesini, sonrasını ve hata/retry'ı** kontrol edersin.
 
-### 6.3 Hazır (built-in) middleware'ler — tekerleği yeniden icat etme
+### 6.3 Hazır (built-in) middleware'ler — tam katalog
 
-Sektör standardı: yaygın ihtiyaçlar için **hazır** middleware kullan:
+Sektör standardı: yaygın ihtiyaçlar için **hazır** middleware kullan, yeniden
+yazma. Hepsi `langchain.agents.middleware` altında, provider-agnostik:
 
-| Middleware | İşi | Hangi vizyon adımı |
-|-----------|-----|--------------------|
-| `SummarizationMiddleware` | konuşma uzayınca geçmişi özetle (context taşmasın) | uzun chat |
-| `HumanInTheLoopMiddleware` | kritik tool çağrısında dur, insan onayı bekle | **Adım 4 (HITL)** |
-| `PIIMiddleware` / PII redaction | çıktıdaki kişisel veriyi maskele | güvenlik |
-| `LLMToolSelectorMiddleware` | çağrı başına ilgili tool alt kümesini seç | çok tool'lu ajan |
-| `ModelFallbackMiddleware` | birincil model patlarsa yedeğe geç | dayanıklılık |
-| `ModelCallLimitMiddleware` / `ToolCallLimitMiddleware` | çağrı sayısını sınırla | maliyet/runaway koruma |
+| Middleware | İşi | Önemli parametre |
+|-----------|-----|------------------|
+| `SummarizationMiddleware` | token sınırına yaklaşınca geçmişi özetle | `trigger`, `keep` |
+| `HumanInTheLoopMiddleware` | kritik tool çağrısında dur, onay/düzenle/reddet | `interrupt_on` (+ **checkpointer şart**) |
+| `ModelCallLimitMiddleware` | model çağrısı sayısını sınırla | `thread_limit`, `run_limit`, `exit_behavior` |
+| `ToolCallLimitMiddleware` | tool çağrısı sayısını sınırla (global veya tool-bazlı) | `tool_name`, `thread_limit`, `run_limit` |
+| `ModelFallbackMiddleware` | birincil model patlarsa yedeğe geç | sıralı model listesi |
+| `PIIMiddleware` | kişisel veriyi yakala/maskele | `strategy`, `apply_to_input/output` |
+| `TodoListMiddleware` | ajana `write_todos` planlama tool'u ver | `system_prompt` |
+| `LLMToolSelectorMiddleware` | ana modelden önce ilgili tool alt kümesini seç | `max_tools`, `always_include` |
+| `ToolRetryMiddleware` | başarısız tool çağrısını exponential backoff'la tekrarla | `max_retries`, `backoff_factor` |
+| `ModelRetryMiddleware` | başarısız model çağrısını tekrarla | `max_retries`, `on_failure` |
+| `LLMToolEmulator` | gerçek tool yerine LLM ile sahte cevap (**test**) | `tools` (hangileri taklit) |
+| `ContextEditingMiddleware` | eski tool çıktılarını temizle (context yönetimi) | `ClearToolUsesEdit(trigger, keep)` |
+| `ShellToolMiddleware` | kalıcı shell oturumu sun (güvenlik politikası ile) | execution policy |
+| `FileSearchMiddleware` | dosya üzerinde Glob/Grep arama tool'ları | — |
+| `FilesystemMiddleware` | ajana dosya sistemi (context/uzun-vade hafıza) | — |
+| `SubAgentMiddleware` | subagent doğurma yeteneği (`task` tool'u) | — |
 
 ```python
 from langchain.agents.middleware import HumanInTheLoopMiddleware, SummarizationMiddleware
+from langgraph.checkpoint.memory import InMemorySaver
 
 agent = create_agent(
     model="openai:gpt-4o-mini",
     tools=lc_tools,
+    checkpointer=InMemorySaver(),              # HITL için ŞART
     middleware=[
-        SummarizationMiddleware(model="openai:gpt-4o-mini"),
-        HumanInTheLoopMiddleware(interrupt_on={"sql_query": True}),  # kritik SQL'de dur
+        SummarizationMiddleware(model="openai:gpt-4o-mini",
+                                trigger=("tokens", 4000), keep=("messages", 20)),
+        HumanInTheLoopMiddleware(interrupt_on={
+            "sql_query": {"allowed_decisions": ["approve", "edit", "reject"]},
+        }),
     ],
 )
 ```
 
-> **Bağ:** `HumanInTheLoopMiddleware` tam olarak vizyonun "DELETE/UPDATE'te
-> Onayla/Reddet butonu" (Adım 4) ihtiyacını karşılar — ve altında LangGraph
-> `interrupt()` + checkpointer çalışır (bkz. langgraph_guide bölüm 7).
-> `ToolCallLimitMiddleware` ise senin mevcut `agent_max_steps` korumanın
-> hazır karşılığı.
+**Senin projene doğrudan değecek olanlar:**
+- `HumanInTheLoopMiddleware` → vizyonun "DELETE/UPDATE'te Onayla/Reddet" (Adım 4).
+  Dikkat: tool **adıyla** eşleşir (`@tool` fonksiyon adı) ve **checkpointer ister**
+  (altında `interrupt()` + persistence — bkz. langgraph_guide bölüm 7).
+  `allowed_decisions` ile sadece onay değil **düzenleme/red** de mümkün.
+- `ToolCallLimitMiddleware` / `ModelCallLimitMiddleware` → mevcut `agent_max_steps`
+  korumanın hazır, daha zengin karşılığı (`exit_behavior`: `continue`/`error`/`end`).
+- `PIIMiddleware` → denetim verisinde kişisel veri maskeleme (enterprise/uyumluluk).
+- `SummarizationMiddleware` / `ContextEditingMiddleware` → uzun denetim
+  konuşmalarında context'i token sınırında tutar.
+- `LLMToolEmulator` → **test** standardı: gerçek MCP/DB'ye dokunmadan ajanı dene
+  (AGENTS.md "mock LLM, MCP, Qdrant in tests" kuralının doğal aracı).
 
 ### 6.4 Özel (custom) middleware — örnek
 
@@ -490,6 +672,193 @@ o tool'u atlar ve modele "reddedildi" bilgisini geri besler.
 - **Güvenlik katmanlıdır:** read-only rol (DB) + `ensure_read_only()` (tool) +
   HITL (politika). HITL en dış halka; alttaki ikisini **değiştirmez**, üstüne
   ekler.
+
+**4 karar tipi (insan ne diyebilir?):**
+
+| Karar | Ne olur | Örnek |
+|-------|---------|-------|
+| ✅ `approve` | Tool olduğu gibi çalışır | SQL'i onayla |
+| ✏️ `edit` | Argümanlar **değiştirilip** çalışır | `DELETE`'i daha dar `WHERE` ile düzelt |
+| ❌ `reject` | Tool çalışmaz; gerekçe konuşmaya eklenir | Silmeyi reddet, sebebini yaz |
+| 💬 `respond` | Tool atlanır; insanın mesajı **tool sonucu** olur | `ask_user` tarzı tool'a doğrudan cevap |
+
+⚠️ **Önemli ayrım:** `reject` ≠ `respond`. Yan etkili bir tool'u reddetmek için
+**`reject`** kullan; `respond` "insan tool'un yerine geçti, cevabı bu" demektir
+(model bunu **başarılı** sonuç sanar). Edit yaparken küçük değişiklik yap — büyük
+değişiklik modeli yeniden düşünmeye itip tool'u tekrar çağırtabilir.
+
+**Doğru resume API'si (v2):** Karar bir **liste**'dir (her duraklayan eyleme bir
+karar, **aynı sırada**):
+
+```python
+result = agent.invoke(inputs, config={"configurable": {"thread_id": tid}}, version="v2")
+result.interrupts          # incelenecek eylemler (action_requests + review_configs)
+
+agent.invoke(
+    Command(resume={"decisions": [{"type": "approve"}]}),   # veya reject/edit/respond
+    config={"configurable": {"thread_id": tid}}, version="v2",
+)
+```
+
+**Koşullu interrupt (`when`) — senin SQL senaryon için TAM isabet:** Her çağrıda
+değil, sadece argümanlar bir koşulu sağladığında duraksın. LangChain'in resmi
+örneği neredeyse senin `ensure_read_only()` mantığın:
+
+```python
+def is_write_query(request: ToolCallRequest) -> bool:
+    query = request.tool_call["args"].get("query", "")
+    return not query.lstrip().upper().startswith("SELECT")   # SELECT değilse duraklat
+
+HumanInTheLoopMiddleware(interrupt_on={
+    "execute_sql": {"allowed_decisions": ["approve", "reject"], "when": is_write_query},
+})
+```
+
+Yani salt-okunur `SELECT`'ler **akıcı** geçer, yazma denemeleri **insana** düşer.
+(Gereksinim: `langchain>=1.3.3`.) Bu, senin "DELETE/UPDATE'te onay" vizyonunu
+middleware seviyesinde, tool'u değiştirmeden kurar.
+
+### 6.7 Middleware ayrı bir runtime DEĞİL — `StateGraph`'e gömülür (senin için kritik)
+
+Bu, senin mimarini doğrudan ilgilendiren en önemli içgörü:
+
+> **Middleware'ler, `create_agent`'ın döndürdüğü derlenmiş LangGraph'in
+> *içinde* çalışır.** Yani ayrı bir katman/runtime değildir. Sonuç: bir
+> `create_agent` (middleware'iyle birlikte) **bütün haliyle** daha büyük bir
+> `StateGraph`'e bir **node** (veya subgraph) olarak konabilir — ve tüm
+> middleware kancaları orada da çalışmaya devam eder.
+
+Resmi örnek (bir ajanı düğüm olarak gömme):
+
+```python
+from langchain.agents import AgentState, create_agent
+from langchain.agents.middleware import HumanInTheLoopMiddleware
+from langgraph.graph import START, StateGraph
+
+email_agent = create_agent(
+    model="claude-sonnet-4-6",
+    tools=[read_email, send_email],
+    middleware=[HumanInTheLoopMiddleware(interrupt_on={"send_email": True})],
+)
+
+graph = (
+    StateGraph(AgentState)
+    .add_node("classify", classify_node)
+    .add_node("email_agent", email_agent)        # ← ajan, bir DÜĞÜM
+    .add_edge(START, "classify")
+    .add_conditional_edges("classify", route)     # önce sınıflandır, sonra yönlendir
+    .compile()
+)
+```
+
+`email_agent` düğümü çalışınca HITL interrupt'ı, summarization, PII, retry —
+hepsi **o düğümle birlikte** taşınır.
+
+**Bu senin projen için ne demek?** İki seviyeyi karıştırma derdin biten yer:
+- **Üst seviye orkestrasyon** (Researcher → Analyst → Auditor, koşullu döngü) →
+  senin elle kurduğun `StateGraph` ([langgraph_guide.md](langgraph_guide.md) bölüm 6).
+- **Tek tek ajanlar** → her biri bir `create_agent` (kendi tool'ları +
+  middleware'iyle), üst graph'a **node** olarak girer.
+
+Yani "Researcher'a HITL/limit/PII ekleyeyim" demek = Researcher'ı bir
+`create_agent` yapıp ilgili middleware'i ona vermek; üst graph'ın döngü mantığı
+hiç değişmez. Bu desen "loop until done"dan fazlasını isteyen topolojiler için
+(önce sınıflandır-sonra-yönlendir, paralel fan-out, deterministik adımlarla
+ajanları birbirine dikme) **tam senin Adım 3 ihtiyacın**.
+
+> Subgraph olarak gömerken checkpointer kapsamı (per-invocation vs per-thread)
+> ayrı bir konudur — HITL'de doğru thread'e devam için önemli; LangGraph
+> "use subgraphs" dokümanına bak.
+
+### 6.8 Guardrails — güvenlik/uyumluluk kontrolleri
+
+**Guardrail = ajanın akışında stratejik noktalarda içerik doğrulayan/filtreleyen
+kontrol.** İki yaklaşım var:
+
+| Tür | Nasıl | Artı / Eksi |
+|-----|-------|-------------|
+| **Deterministik** | regex, keyword, açık kural | Hızlı, ucuz, öngörülebilir; ince ihlalleri kaçırabilir |
+| **Model-tabanlı** | bir LLM/sınıflandırıcı değerlendirir | Anlamsal incelikleri yakalar; yavaş, pahalı |
+
+İkisi de **middleware ile** kurulur — `before_agent` (girişte bir kez) veya
+`after_agent` (çıkışta bir kez) kancalarıyla. Kritik mekanizma: bir kancanın
+`can_jump_to=["end"]` ile akışı **erken kesmesi** (`jump_to: "end"`):
+
+```python
+@before_agent(can_jump_to=["end"])
+def content_filter(state, runtime):
+    text = state["messages"][0].content.lower()
+    if any(k in text for k in BANNED):
+        return {"messages": [{"role": "assistant", "content": "Reddedildi."}],
+                "jump_to": "end"}      # ajan hiç çalışmadan dur
+    return None
+```
+
+`after_agent` ise model-tabanlı bir son kontrol için ideal (örn. "bu cevap güvenli
+mi?" diye küçük bir modele sor, değilse cevabı değiştir).
+
+**Katmanlı savunma (sektör standardı):** guardrail'leri **sıralı** middleware
+listesi olarak diz — sıra = uygulanış sırası:
+
+```python
+middleware=[
+    ContentFilterMiddleware(...),                 # 1) girişte deterministik filtre
+    PIIMiddleware("email", apply_to_input=True),  # 2) model öncesi PII
+    HumanInTheLoopMiddleware(interrupt_on={...}),  # 3) kritik tool'da onay
+    SafetyGuardrailMiddleware(),                  # 4) çıkışta model-tabanlı kontrol
+]
+```
+
+**Senin projene bağ:** Sentinel bir denetim sistemi → guardrail'ler doğal yeri.
+SQL guard'ın zaten deterministik bir guardrail; üstüne `PIIMiddleware` (denetim
+verisinde kişisel veri) + `after_agent` faithfulness/güvenlik kontrolü
+eklenebilir. Not: HITL ve PII de birer guardrail'dir — yani bunlar ayrı kavramlar
+değil, hepsi guardrail şemsiyesi altında.
+
+### 6.9 Context engineering — "ajan neden güvenilmez?" sorusunun cevabı
+
+Bu, middleware'in **var oluş amacını** çerçeveleyen üst kavram. LangChain'in
+tezi: ajanlar çoğunlukla model yetersiz olduğu için değil, **modele doğru bağlam
+verilmediği** için başarısız olur. Context engineering = "doğru bilgiyi + tool'u
++ formatta modele vermek." Middleware bunun **mekanizmasıdır**.
+
+**Üç bağlam türü (neyi kontrol edersin):**
+
+| Tür | Ne | Kanca |
+|-----|-----|-------|
+| **Model context** | model çağrısına ne girer (prompt, mesajlar, tool'lar, format) | `dynamic_prompt`, `wrap_model_call` |
+| **Tool context** | tool'lar neye erişir / ne üretir | tool'un state/store erişimi |
+| **Life-cycle context** | model↔tool **arasında** ne olur (özet, guardrail, log) | `before/after_*` |
+
+**Üç veri kaynağı (bağlam nereden gelir) — çok önemli ayrım:**
+
+| Kaynak | Diğer adı | Kapsam | Örnek |
+|--------|-----------|--------|-------|
+| **Runtime Context** | statik config | konuşma boyu | user_id, API key, DB bağlantısı, **yetkiler** |
+| **State** | kısa-vade hafıza | konuşma boyu | mesajlar, tool sonuçları, yüklenen dosyalar |
+| **Store** | uzun-vade hafıza | **konuşmalar arası** | kullanıcı tercihleri, çıkarılmış içgörüler |
+
+> **State vs Store — karıştırma:** *State* tek konuşmanın çalışma belleği (senin
+> `AgentState`, [langgraph_guide.md](langgraph_guide.md) bölüm 3). *Store* ise
+> konuşmalar **arası** kalıcı bilgi (kullanıcı tercihi vb.). İkisi farklı ömür.
+
+**Dinamik prompt örneği** — prompt'u state/yetkiye göre uyarlamak (statik string
+değil):
+
+```python
+@dynamic_prompt
+def context_aware_prompt(request: ModelRequest) -> str:
+    base = "You are a careful data analyst."
+    if request.runtime.context.user_role == "viewer":
+        base += "\nYou have read-only access. Guide users to read operations only."
+    return base
+```
+
+**Senin projene bağ:** Bu, RBAC vizyonunla (VIZYON 2'deki metadata/RBAC) doğrudan
+örtüşür: kullanıcının rolü **Runtime Context**'ten gelir, `dynamic_prompt` ona
+göre ajanı "salt-okunur" moda sokar. Denetim geçmişi/tercihler **Store**'a,
+o anki konuşma **State**'e (senin `AgentState`) gider. Bu üçlüyü ayrı tutmak,
+güvenilir ajanın temelidir.
 
 ---
 
