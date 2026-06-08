@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     # LLM and Tracing Settings
     openai_api_key: Optional[SecretStr] = None
+    anthropic_api_key: Optional[SecretStr] = None
     langchain_api_key: Optional[SecretStr] = None
     langchain_tracing_v2: bool = True
     langchain_project: str = "AGENTIC-RAG"
@@ -44,6 +45,17 @@ class Settings(BaseSettings):
 
     # Safety bound on the agent's tool-calling loop (avoid runaway calls).
     agent_max_steps: int = 6
+
+    # --- LangGraph agent chat model (Researcher / Analyst / Auditor) ---
+    # Provider-agnostic: `init_chat_model` picks the backend from this single
+    # "provider:model" string, so swapping providers is a one-env-var change
+    # (AGENT_MODEL), never a code change. API keys are read from the standard
+    # env vars (ANTHROPIC_API_KEY / OPENAI_API_KEY) automatically.
+    #   free/local : "ollama:llama3.1:8b"
+    #   anthropic  : "anthropic:claude-opus-4-8"   (needs ANTHROPIC_API_KEY)
+    #   openai     : "openai:gpt-4o"               (needs OPENAI_API_KEY)
+    agent_model: str = "ollama:llama3.1:8b"
+    agent_temperature: float = 0.0
 
     # Vector Database (Qdrant) Settings
     qdrant_host: str = "qdrant-db"
