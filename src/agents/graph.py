@@ -1,27 +1,15 @@
-# ÖRNEK — agents/graph.py
-from langgraph.graph import StateGraph, START, END
-from src.agents.state import AgentState
+"""StateGraph wiring for the multi-agent layer — the heart of Step 3.
 
-def build_graph(checkpointer=None):
-    g = StateGraph(AgentState)
+This builds the cyclical graph: Researcher -> Analyst -> Auditor, with a
+conditional edge from the Auditor that either loops back to the Researcher
+(draft not faithful) or routes to END (faithful). A `revision_count` brake plus
+LangGraph's `recursion_limit` stop infinite loops.
 
-    # 1) düğümleri kaydet
-    g.add_node("researcher", researcher)
-    g.add_node("analyst", analyst)
-    g.add_node("auditor", auditor)
+    Researcher -> Analyst -> Auditor
+                               |- not faithful -> Researcher (cycle)
+                               |- faithful      -> END
 
-    # 2) normal (sabit) kenarlar
-    g.add_edge(START, "researcher")
-    g.add_edge("researcher", "analyst")
-    g.add_edge("analyst", "auditor")
-
-    # 3) CONDITIONAL EDGE — döngünün doğduğu yer
-    g.add_conditional_edges(
-        "auditor",          # bu düğümden sonra
-        route_after_audit,  # karar fonksiyonu çalışır
-        {                   # dönen etiket → gidilecek düğüm
-            "revise": "researcher",   # halüsinasyon var → geri dön (CYCLE)
-            "finish": END,            # faithful → bitir
-        },
-    )
-    return g.compile(checkpointer=checkpointer)
+TODO (next step): implement build_graph(checkpointer=None) once the three nodes
+(researcher/analyst/auditor) and the route_after_audit router are written.
+See docs/agents/langgraph_guide.md §6.
+"""
