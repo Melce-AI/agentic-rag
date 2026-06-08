@@ -57,6 +57,14 @@ class Settings(BaseSettings):
     agent_model: str = "ollama:llama3.1:8b"
     agent_temperature: float = 0.0
 
+    # Loop brakes for the multi-agent graph (two layers, both needed):
+    #   business brake — max Auditor -> Researcher revision loops before the
+    #   graph gives up and returns the current draft (route_after_audit).
+    agent_max_revisions: int = 2
+    #   infrastructure brake — LangGraph's hard cap on total node steps per run,
+    #   passed at invoke time as config={"recursion_limit": ...}.
+    agent_recursion_limit: int = 25
+
     # Vector Database (Qdrant) Settings
     qdrant_host: str = "qdrant-db"
     qdrant_port: int = 6333
