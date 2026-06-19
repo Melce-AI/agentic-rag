@@ -63,27 +63,75 @@ def _parse_utf8_text(source_name: str, raw_content: bytes) -> str:
         ) from exc
 
 
-def _parse_pdf(source_name: str, raw_content: bytes) -> str:
-    # Imported lazily so the text/CSV path does not pay the pypdf import cost.
-    from pypdf import PdfReader
-    from pypdf.errors import PdfReadError
+class DoclingParser:
+    """Lazy-loading Docling converter — initialised once per process, reused per request.
 
-    try:
-        reader = PdfReader(io.BytesIO(raw_content))
-        pages = [page.extract_text() or "" for page in reader.pages]
-    except (PdfReadError, ValueError, OSError) as exc:
-        raise DocumentParseError(
-            details={"source_name": source_name, "error": str(exc)}
-        ) from exc
+    ``to_markdown`` is used for prose formats (PDF, DOCX, PPTX).
+    ``to_csv_tables`` is used for spreadsheets (XLSX) so the output feeds
+    directly into ``TableChunker`` without row-boundary splits.
+    """
 
-    return "\n\n".join(page.strip() for page in pages if page.strip())
+    def __init__(self) -> None:
+        self._converter = None
+
+    @property
+    def converter(self):
+        if self._converter is None:
+            from docling.datamodel.base_models import InputFormat
+            from docling.datamodel.pipeline_options import PdfPipelineOptions
+            from docling.document_converter import DocumentConverter, PdfFormatOption
+
+            pipeline_opts = PdfPipelineOptions()
+
+            self._converter = DocumentConverter(
+                format_options={
+                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_opts)
+                }
+            )
+        return self._converter
+
+    def to_markdown(self, source_name: str, raw_content: bytes) -> str:
+        return self._convert(source_name, raw_content).document.export_to_markdown()
+
+    def to_csv_tables(self, source_name: str, raw_content: bytes) -> str:
+        result = self._convert(source_name, raw_content)
+        tables = [
+            table.export_to_dataframe().to_csv(index=False)
+            for table in result.document.tables
+        ]
+        return "\n".join(tables)
+
+    def _convert(self, source_name: str, raw_content: bytes):
+        from docling.datamodel.base_models import ConversionStatus
+        from docling.datamodel.document import DocumentStream
+
+        try:
+            stream = DocumentStream(name=source_name, stream=io.BytesIO(raw_content))
+            result = self.converter.convert(stream)
+        except Exception as exc:
+            raise DocumentParseError(
+                details={"source_name": source_name, "error": str(exc)}
+            ) from exc
+
+        if result.status == ConversionStatus.FAILURE:
+            raise DocumentParseError(
+                details={"source_name": source_name, "status": result.status.value}
+            )
+
+        return result
+
+
+docling_parser = DoclingParser()
 
 
 _PARSERS: dict[DocumentFileType, Callable[[str, bytes], str]] = {
     DocumentFileType.MARKDOWN: _parse_utf8_text,
     DocumentFileType.TEXT: _parse_utf8_text,
     DocumentFileType.CSV: _parse_utf8_text,
-    DocumentFileType.PDF: _parse_pdf,
+    DocumentFileType.PDF: docling_parser.to_markdown,
+    DocumentFileType.DOCX: docling_parser.to_markdown,
+    DocumentFileType.PPTX: docling_parser.to_markdown,
+    DocumentFileType.XLSX: docling_parser.to_csv_tables,
 }
 
 
