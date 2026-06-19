@@ -10,6 +10,7 @@ It gathers evidence via the MCP tools and does NOT write the final answer; that
 is the Analyst's job (single responsibility).
 """
 
+import logging
 from pathlib import Path
 
 from langchain.agents import create_agent
@@ -18,6 +19,8 @@ from langchain_core.messages import HumanMessage, ToolMessage
 from src.agents.llm import get_chat_model
 from src.agents.state import AgentState
 from src.agents.tools import get_tools
+
+log = logging.getLogger(__name__)
 
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "researcher_system.md"
 
@@ -38,6 +41,9 @@ async def researcher(state: AgentState) -> dict:
     # create_agent returns a compiled graph that drives the tool-calling loop.
     # TODO: cache this — today it re-fetches tools / relaunches the MCP
     # subprocess on every call, including each revision loop.
+    revision = state.get("revision_count", 0)
+    log.info("Researcher starting (revision=%d): %s", revision, state["question"][:120])
+
     tools = await get_tools()
     agent = create_agent(get_chat_model(), tools, system_prompt=_load_prompt())
 
@@ -54,4 +60,5 @@ async def researcher(state: AgentState) -> dict:
         if isinstance(m, ToolMessage)
     ]
 
+    log.info("Researcher done: retrieved %d doc(s)", len(retrieved_docs))
     return {"retrieved_docs": retrieved_docs, "messages": messages}

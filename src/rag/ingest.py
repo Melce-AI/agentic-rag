@@ -1,10 +1,13 @@
 import datetime as dt
 import hashlib
+import logging
 import uuid
+from pathlib import Path
 
 from opentelemetry import trace
 from starlette.concurrency import run_in_threadpool
 
+from src.adapters.vector_store.qdrant import QdrantManager, qdrant_manager
 from src.core.config import get_settings
 from src.core.exceptions import (
     AppException,
@@ -14,14 +17,23 @@ from src.core.exceptions import (
     RagIngestError,
     RagValidationError,
 )
+from src.observability.tracing import traced
 from src.rag.chunking import HeadingAwareChunker, TableChunker
 from src.rag.embeddings import EmbeddingProvider, FastEmbedProvider
 from src.rag.models import Chunk, ContentKind, Document
-from src.adapters.vector_store.qdrant import QdrantManager, qdrant_manager
-from src.observability.tracing import traced
+
+log = logging.getLogger(__name__)
 
 
 class DocumentIngestService:
+    PROCESSED_DATA_DIR = Path("data/processed")
+    PROCESSED_SUFFIX_BY_SOURCE_SUFFIX = {
+        ".pdf": ".md",
+        ".docx": ".md",
+        ".pptx": ".md",
+        ".xlsx": ".csv",
+    }
+
     def __init__(
         self,
         vector_store: QdrantManager = qdrant_manager,
@@ -73,10 +85,17 @@ class DocumentIngestService:
         span.set_attribute("rag.source_name", source_name)
         span.set_attribute("rag.content_kind", content_kind.value)
 
+        log.info(
+            "Ingesting '%s' (tenant=%s, kind=%s)",
+            source_name,
+            tenant_id,
+            content_kind.value,
+        )
         try:
             chunks = self._chunker_for(content_kind).split(content)
             if not chunks:
                 raise RagValidationError("document did not produce any chunks")
+            log.info("'%s' split into %d chunks", source_name, len(chunks))
 
             content_hash = self._sha256(content)
             document_id = self._stable_uuid(f"{tenant_id}:{source_name}:{content_hash}")
@@ -86,6 +105,15 @@ class DocumentIngestService:
                 source_name=source_name,
                 content_hash=content_hash,
             )
+            processed_path = await run_in_threadpool(
+                self._save_processed_file,
+                source_name,
+                content,
+            )
+            if processed_path is not None:
+                span.set_attribute("rag.processed_file", str(processed_path))
+
+            log.info("Embedding chunks for '%s'", source_name)
             embeddings = await run_in_threadpool(
                 self.embedding_provider.embed_documents,
                 [chunk.text for chunk in chunks],
@@ -139,6 +167,12 @@ class DocumentIngestService:
             span.set_attribute("output.value", document.document_id)
             span.set_attribute("rag.document_id", document.document_id)
             span.set_attribute("rag.chunk_count", len(records))
+            log.info(
+                "Ingested '%s': document_id=%s, chunks=%d",
+                source_name,
+                document.document_id,
+                len(records),
+            )
             return {
                 "document_id": document.document_id,
                 "chunk_count": len(records),
@@ -155,6 +189,7 @@ class DocumentIngestService:
                 }
             ) from exc
 
+    @traced("rag.list_documents")
     async def list_documents(self, *, tenant_id: str, limit: int = 100) -> dict:
         if not tenant_id.strip():
             raise RagValidationError("tenant_id must not be empty")
@@ -177,6 +212,7 @@ class DocumentIngestService:
                 details={"tenant_id": tenant_id, "error": str(exc)}
             ) from exc
 
+    @traced("rag.delete_document")
     async def delete_document(self, *, document_id: str, tenant_id: str) -> dict:
         if not document_id.strip():
             raise RagValidationError("document_id must not be empty")
@@ -211,3 +247,31 @@ class DocumentIngestService:
     @staticmethod
     def _stable_uuid(value: str) -> str:
         return str(uuid.uuid5(uuid.NAMESPACE_URL, value))
+
+    def _save_processed_file(self, source_name: str, content: str) -> Path | None:
+        source_path = Path(source_name)
+        output_suffix = self.PROCESSED_SUFFIX_BY_SOURCE_SUFFIX.get(
+            source_path.suffix.lower()
+        )
+        if output_suffix is None:
+            return None
+
+        span = trace.get_current_span()
+        try:
+            self.PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+            processed_path = self.PROCESSED_DATA_DIR / (
+                self._safe_filename_stem(source_path.stem) + output_suffix
+            )
+            processed_path.write_text(content, encoding="utf-8")
+        except OSError as exc:
+            span.set_attribute("rag.processed_file_error", str(exc))
+            return None
+
+        return processed_path
+
+    @staticmethod
+    def _safe_filename_stem(stem: str) -> str:
+        safe = "".join(
+            char if char.isalnum() or char in {"-", "_"} else "_" for char in stem
+        ).strip("_")
+        return safe or "document"

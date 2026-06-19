@@ -1,16 +1,19 @@
+import logging
 from dataclasses import replace
 from typing import Any
 
 from opentelemetry import trace
 from starlette.concurrency import run_in_threadpool
 
+from src.adapters.vector_store.qdrant import QdrantManager, qdrant_manager
 from src.core.config import get_settings
 from src.core.exceptions import AppException, RagRetrievalError, RagValidationError
+from src.observability.tracing import traced
 from src.rag.embeddings import EmbeddingProvider, FastEmbedProvider
 from src.rag.models import RetrievedChunk
 from src.rag.reranker import FastEmbedReranker, Reranker
-from src.adapters.vector_store.qdrant import QdrantManager, qdrant_manager
-from src.observability.tracing import traced
+
+log = logging.getLogger(__name__)
 
 
 class HybridRetriever:
@@ -43,6 +46,7 @@ class HybridRetriever:
             raise RagValidationError("query must not be empty")
 
         limit = top_k or self.settings.rag_top_k
+        log.info("Searching (tenant=%s, top_k=%d): %s", tenant_id, limit, query[:100])
         span = trace.get_current_span()
         span.set_attribute("input.value", query)
         span.set_attribute("rag.tenant_id", tenant_id)
@@ -73,6 +77,12 @@ class HybridRetriever:
                 span.set_attribute(f"retrieval.documents.{i}.document.score", r.score)
             span.set_attribute("rag.candidates", len(raw_results))
             span.set_attribute("rag.result_count", len(results))
+            log.info(
+                "Search done: %d candidates → %d results (rerank=%s)",
+                len(raw_results),
+                len(results),
+                self.reranker is not None,
+            )
             return results
         except AppException:
             raise

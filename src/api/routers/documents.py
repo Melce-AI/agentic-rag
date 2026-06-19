@@ -1,5 +1,6 @@
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from opentelemetry import trace
+from starlette.concurrency import run_in_threadpool
 
 from src.rag.ingest import DocumentIngestService
 from src.rag.loaders import load_document
@@ -51,7 +52,8 @@ async def upload_document(
     span = trace.get_current_span()
     span.set_attribute("openinference.span.kind", "CHAIN")
     span.set_attribute("input.value", file.filename or "")
-    loaded_document = load_document(
+    loaded_document = await run_in_threadpool(
+        load_document,
         source_name=file.filename,
         raw_content=await file.read(),
     )

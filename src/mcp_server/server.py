@@ -16,7 +16,7 @@ from mcp.server.fastmcp import FastMCP
 
 from src.mcp_server.tools import rag_search, read_logs, sql
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 mcp = FastMCP("agentic-rag-mcp")
 

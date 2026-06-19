@@ -57,14 +57,17 @@ def test_load_document_raises_on_corrupt_pdf():
 
 def test_load_document_rejects_unsupported_extensions():
     with pytest.raises(RagValidationError) as exc_info:
-        load_document(source_name="data.xlsx", raw_content=b"content")
+        load_document(source_name="data.xls", raw_content=b"content")
 
     assert exc_info.value.code == "RAG_422"
     assert exc_info.value.details["supported_extensions"] == [
         ".csv",
+        ".docx",
         ".md",
         ".pdf",
+        ".pptx",
         ".txt",
+        ".xlsx",
     ]
 
 

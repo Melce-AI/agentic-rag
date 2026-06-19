@@ -218,7 +218,8 @@ logs/
 *.log
 *.jsonl
 
+# Local processed ingest outputs
+data/processed/
+
 .vscode/
 .claude/
-
-data/processed/

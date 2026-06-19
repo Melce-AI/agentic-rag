@@ -19,6 +19,7 @@ services:
     volumes:
       - ../../src:/app/src:ro
       - ../../logs:/app/logs:rw
+      - ../../data:/app/data:rw
       - hf-cache:/app/.cache/huggingface
     environment:
       UV_COMPILE_BYTECODE: "1"

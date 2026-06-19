@@ -14,6 +14,8 @@ Two brakes stop infinite loops:
     config={"recursion_limit": settings.agent_recursion_limit}.
 """
 
+import logging
+
 from langgraph.graph import END, START, StateGraph
 
 from src.agents.nodes.analyst import analyst
@@ -21,6 +23,8 @@ from src.agents.nodes.auditor import auditor
 from src.agents.nodes.researcher import researcher
 from src.agents.state import AgentState
 from src.core.config import get_settings
+
+log = logging.getLogger(__name__)
 
 
 def route_after_audit(state: AgentState) -> str:
@@ -30,11 +34,18 @@ def route_after_audit(state: AgentState) -> str:
     state. (Mutation happens in nodes; routing happens in edges.)
     """
     verdict = state.get("audit_verdict") or {}
+    revision_count = state.get("revision_count", 0)
     if verdict.get("faithful"):
+        log.info("Routing: faithful → finish (revision=%d)", revision_count)
         return "finish"
-    if state.get("revision_count", 0) >= get_settings().agent_max_revisions:
-        # Revision budget spent — stop and return the current draft anyway.
+    if revision_count >= get_settings().agent_max_revisions:
+        log.warning(
+            "Routing: revision budget exhausted (%d/%d) → finish",
+            revision_count,
+            get_settings().agent_max_revisions,
+        )
         return "finish"
+    log.info("Routing: not faithful → revise (revision=%d)", revision_count)
     return "revise"
 
 

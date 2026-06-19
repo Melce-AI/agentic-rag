@@ -8,6 +8,9 @@ class DocumentFileType(StrEnum):
     TEXT = ".txt"
     CSV = ".csv"
     PDF = ".pdf"
+    DOCX = ".docx"
+    PPTX = ".pptx"
+    XLSX = ".xlsx"
 
 
 class ContentKind(StrEnum):
@@ -27,6 +30,9 @@ CONTENT_KIND_BY_FILE_TYPE: dict[DocumentFileType, ContentKind] = {
     DocumentFileType.TEXT: ContentKind.TEXT,
     DocumentFileType.CSV: ContentKind.TABULAR,
     DocumentFileType.PDF: ContentKind.TEXT,
+    DocumentFileType.DOCX: ContentKind.TEXT,
+    DocumentFileType.PPTX: ContentKind.TEXT,
+    DocumentFileType.XLSX: ContentKind.TABULAR,
 }
 
 
