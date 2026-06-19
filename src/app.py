@@ -14,6 +14,7 @@ from src.core.exception_handlers import (
     unhandled_exception_handler,
     validation_exception_handler,
 )
+from src.core.context import request_id_var
 from src.core.exceptions import AppException
 from src.adapters.vector_store.qdrant import qdrant_manager
 from src.observability.logging import setup_logging
@@ -64,10 +65,15 @@ app = FastAPI(
 
 @app.middleware("http")
 async def add_request_id_middleware(request: Request, call_next):
-    request.state.request_id = str(uuid.uuid4())
-    response = await call_next(request)
-    response.headers["X-Request-Id"] = request.state.request_id
-    return response
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+    token = request_id_var.set(request_id)
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-Id"] = request_id
+        return response
+    finally:
+        request_id_var.reset(token)
 
 
 from src.api.routers.agent import router as agent_router
