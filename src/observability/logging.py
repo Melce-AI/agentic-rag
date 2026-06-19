@@ -10,6 +10,34 @@ from typing import override
 
 from src.core.config import get_settings
 
+LOG_RECORD_BUILTIN_ATTRS: frozenset[str] = frozenset(
+    {
+        "args",
+        "asctime",
+        "created",
+        "exc_info",
+        "exc_text",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "module",
+        "msecs",
+        "message",
+        "msg",
+        "name",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "stack_info",
+        "thread",
+        "threadName",
+        "taskName",
+    }
+)
+
 
 class QueueHandlerInit:
     """Ensures that the QueueListener for the QueueHandler is started exactly once, even in reload/multi-import scenarios."""
@@ -59,24 +87,30 @@ class CustomJSONFormatter(logging.Formatter):
         *,
         fmt_keys: dict[str, str] | None = None,
         builtin_attrs: list[str] | None = None,
-    ):
+    ) -> None:
         super().__init__()
         self.fmt_keys = fmt_keys if fmt_keys is not None else {}
-        self.builtin_attrs = set(builtin_attrs) if builtin_attrs is not None else set()
+        self._builtin_attrs = (
+            frozenset(builtin_attrs)
+            if builtin_attrs is not None
+            else LOG_RECORD_BUILTIN_ATTRS
+        )
 
     @override
     def format(self, record: logging.LogRecord) -> str:
         message = self._prepare_log_dict(record)
         return json.dumps(message, default=str)
 
-    def _prepare_log_dict(self, record: logging.LogRecord) -> dict:
+    def _prepare_log_dict(self, record: logging.LogRecord) -> dict[str, object]:
         always_fields = {
             "message": record.getMessage(),
             "timestamp": dt.datetime.fromtimestamp(
-                record.created, tz=dt.timezone.utc
+                record.created,
+                tz=dt.timezone.utc,
             ).isoformat(),
         }
-        if record.exc_info is not None:
+
+        if record.exc_info:
             always_fields["exc_info"] = self.formatException(record.exc_info)
 
         if record.stack_info is not None:
@@ -91,10 +125,36 @@ class CustomJSONFormatter(logging.Formatter):
         message.update(always_fields)
 
         for key, val in record.__dict__.items():
-            if key not in self.builtin_attrs:
+            if key not in self._builtin_attrs:
                 message[key] = val
 
         return message
+
+
+class CustomTerminalFormatter(logging.Formatter):
+    """Human-readable formatter that appends extra fields as key=value pairs."""
+
+    @override
+    def format(self, record: logging.LogRecord) -> str:
+        timestamp = dt.datetime.fromtimestamp(
+            record.created,
+            tz=dt.timezone.utc,
+        ).strftime("%H:%M:%S")
+        base = f"[{record.levelname}] {timestamp}: {record.getMessage()}"
+
+        extras = {
+            key: value
+            for key, value in record.__dict__.items()
+            if key not in LOG_RECORD_BUILTIN_ATTRS and not key.startswith("_")
+        }
+        if extras:
+            kv = " ".join(f"{key}={value!r}" for key, value in extras.items())
+            base = f"{base} | {kv}"
+
+        if record.exc_info:
+            base = f"{base}\n{self.formatException(record.exc_info)}"
+
+        return base
 
 
 class NonErrorFilter(logging.Filter):
@@ -104,6 +164,17 @@ class NonErrorFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
         # Only allow log records with level INFO or below (DEBUG, INFO) to pass through this filter
         return record.levelno <= logging.INFO
+
+
+class RequestIDFilter(logging.Filter):
+    """Inject the current request-ID into every log record."""
+
+    @override
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        from src.core.context import request_id_var
+
+        record.request_id = request_id_var.get()
+        return True
 
 
 def _resolve_log_level(level_name: str) -> str:
@@ -118,7 +189,6 @@ def setup_logging() -> None:
     Features:
     - Terminal handler levels controlled by Settings.log_level (dynamic).
     - File log handler follows log_level dynamically. Useful for checking what your LOG_LEVEL actually captures.
-    - File JSON handler always logs at DEBUG for full traceability (persistent).
     - Hierarchical loggers: src.api, src.core, src.adapters, src.rag etc. can be configured independently.
     - Non-blocking I/O via QueueHandler + QueueListener.
     - stdout/stderr separation: INFO and below go to stdout, WARNING+ to stderr.
@@ -129,7 +199,7 @@ def setup_logging() -> None:
     Configure per-module levels in logging_config.json if needed.
     """
 
-    config_file = pathlib.Path("src/observability/logging_config.json")
+    config_file = pathlib.Path(__file__).with_name("logging_config.json")
     with open(config_file, "r", encoding="utf-8") as f_in:
         config = json.load(f_in)
 

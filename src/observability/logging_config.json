@@ -9,6 +9,9 @@
       "format": "[%(levelname)s|%(module)s|L%(lineno)d] %(asctime)s: %(message)s",
       "datefmt": "%Y-%m-%dT%H:%M:%S%z"
     },
+    "terminal": {
+      "()": "src.observability.logging.CustomTerminalFormatter"
+    },
     "json": {
       "()": "src.observability.logging.CustomJSONFormatter",
       "fmt_keys": {
@@ -20,36 +23,33 @@
         "function": "funcName",
         "line": "lineno",
         "thread_name": "threadName"
-      },
-      "builtin_attrs": [
-        "args", "asctime", "created", "exc_info", "exc_text", "filename", "funcName",
-        "levelname", "levelno", "lineno", "module", "msecs", "message", "msg",
-        "name", "pathname", "process", "processName", "relativeCreated",
-        "stack_info", "thread", "threadName", "taskName"
-      ]
+      }
     }    
    },
     "filters": {
     "no_errors": {
       "()": "src.observability.logging.NonErrorFilter"
+    },
+    "request_id": {
+      "()": "src.observability.logging.RequestIDFilter"
     }
   },
     "handlers": {
       "stdout": {
         "class": "logging.StreamHandler",
-        "formatter": "simple",
+        "formatter": "terminal",
         "stream": "ext://sys.stdout",
         "filters": ["no_errors"]
       },
       "stderr": {
         "class": "logging.StreamHandler",
-        "formatter": "simple",
+        "formatter": "terminal",
         "stream": "ext://sys.stderr",
         "level": "WARNING"
       },      
       "file_json": {
         "class": "logging.handlers.RotatingFileHandler",
-        "level": "DEBUG",
+        "level": "INFO",
         "formatter": "json",
         "filename": "logs/agentic_rag.jsonl",
         "maxBytes": 5242880, 
@@ -58,7 +58,7 @@
       },
       "file_log": {
         "class": "logging.handlers.RotatingFileHandler",
-        "formatter": "detailed",
+        "formatter": "terminal",
         "filename": "logs/agentic_rag.log",
         "maxBytes": 5242880, 
         "backupCount": 3,
@@ -72,12 +72,13 @@
           "file_json",
           "file_log"
         ],
-        "respect_handler_level": true
+        "respect_handler_level": true,
+        "filters": ["request_id"]
       }      
     },
   "loggers": {
     "root": {
-      "level": "DEBUG",
+      "level": "INFO",
       "handlers": [
         "queue_handler"
       ]
