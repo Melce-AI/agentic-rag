@@ -41,7 +41,16 @@ dev = [
 ]
 ingest = [
     "docling>=2.104.0",
+    "torch",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
 
 # --- Ruff: linter (check) + formatter (format) ---
 # One fast tool replacing flake8 + isort + black. Config lives here so local

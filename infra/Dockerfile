@@ -9,8 +9,7 @@ FROM python:3.13-slim AS builder
 
 # Keep runtime behavior predictable and logs visible in container environments.
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    UV_COMPILE_BYTECODE=1
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
@@ -32,11 +31,14 @@ RUN --mount=type=cache,target=/root/.cache \
 
 # Layer 2: ingest group (docling + torch). Separate layer so main-dep changes above
 # do not invalidate this cache. Only reruns when the ingest group itself changes.
+# --no-compile-bytecode: torch/transformers have thousands of files; skipping .pyc
+# compilation here saves several minutes with no meaningful runtime cost.
 RUN --mount=type=cache,target=/root/.cache \
     uv sync \
     --locked \
     --no-dev \
     --group ingest \
+    --no-compile-bytecode \
     --no-install-project
 
 # ==========================================
