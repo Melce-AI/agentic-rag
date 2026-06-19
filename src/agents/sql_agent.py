@@ -29,8 +29,6 @@ import os
 import sys
 from pathlib import Path
 
-log = logging.getLogger(__name__)
-
 # TODO (rerank optimization): when the agent retrieves knowledge it goes through
 # the rag_search tool, which reranks candidates with a cross-encoder
 # (src/rag/reranker.py + HybridRetriever._rerank in src/rag/retriever.py).
@@ -44,6 +42,7 @@ from opentelemetry import trace
 from src.core.config import get_settings
 from src.observability.tracing import get_tracer, traced
 
+log = logging.getLogger(__name__)
 _tracer = get_tracer(__name__)
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "sql_agent_system.md"

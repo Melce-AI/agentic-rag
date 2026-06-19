@@ -138,6 +138,7 @@ Run relevant checks after changes when possible.
 Default test command:
 
 ```bash
+uv run ruff check .
 uv run ruff format
 uv run pytest
 ```
