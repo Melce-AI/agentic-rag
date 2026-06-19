@@ -1,6 +1,7 @@
 import datetime as dt
 import hashlib
 import uuid
+from pathlib import Path
 
 from opentelemetry import trace
 from starlette.concurrency import run_in_threadpool
@@ -22,6 +23,14 @@ from src.observability.tracing import traced
 
 
 class DocumentIngestService:
+    PROCESSED_DATA_DIR = Path("data/processed")
+    PROCESSED_SUFFIX_BY_SOURCE_SUFFIX = {
+        ".pdf": ".md",
+        ".docx": ".md",
+        ".pptx": ".md",
+        ".xlsx": ".csv",
+    }
+
     def __init__(
         self,
         vector_store: QdrantManager = qdrant_manager,
@@ -86,6 +95,14 @@ class DocumentIngestService:
                 source_name=source_name,
                 content_hash=content_hash,
             )
+            processed_path = await run_in_threadpool(
+                self._save_processed_file,
+                source_name,
+                content,
+            )
+            if processed_path is not None:
+                span.set_attribute("rag.processed_file", str(processed_path))
+
             embeddings = await run_in_threadpool(
                 self.embedding_provider.embed_documents,
                 [chunk.text for chunk in chunks],
@@ -211,3 +228,31 @@ class DocumentIngestService:
     @staticmethod
     def _stable_uuid(value: str) -> str:
         return str(uuid.uuid5(uuid.NAMESPACE_URL, value))
+
+    def _save_processed_file(self, source_name: str, content: str) -> Path | None:
+        source_path = Path(source_name)
+        output_suffix = self.PROCESSED_SUFFIX_BY_SOURCE_SUFFIX.get(
+            source_path.suffix.lower()
+        )
+        if output_suffix is None:
+            return None
+
+        span = trace.get_current_span()
+        try:
+            self.PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+            processed_path = self.PROCESSED_DATA_DIR / (
+                self._safe_filename_stem(source_path.stem) + output_suffix
+            )
+            processed_path.write_text(content, encoding="utf-8")
+        except OSError as exc:
+            span.set_attribute("rag.processed_file_error", str(exc))
+            return None
+
+        return processed_path
+
+    @staticmethod
+    def _safe_filename_stem(stem: str) -> str:
+        safe = "".join(
+            char if char.isalnum() or char in {"-", "_"} else "_" for char in stem
+        ).strip("_")
+        return safe or "document"

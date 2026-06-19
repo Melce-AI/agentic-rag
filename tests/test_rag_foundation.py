@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -10,7 +11,7 @@ from src.core.exceptions import RagEmbeddingError
 from src.rag.chunking import HeadingAwareChunker
 from src.rag.embeddings import FastEmbedProvider
 from src.rag.ingest import DocumentIngestService
-from src.rag.models import EmbeddedText, RetrievedChunk, SparseEmbedding
+from src.rag.models import ContentKind, EmbeddedText, RetrievedChunk, SparseEmbedding
 from src.rag.retriever import HybridRetriever
 
 
@@ -201,6 +202,78 @@ def test_ingest_service_creates_stable_ids_and_upserts_chunks() -> None:
     assert record["payload"]["content_hash"]
     assert record["dense_vector"] == [0.0, 0.1, 0.2]
     assert record["sparse_indices"] == [1]
+
+
+def test_ingest_service_saves_docling_markdown_by_source_name(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(DocumentIngestService, "PROCESSED_DATA_DIR", tmp_path)
+    vector_store = FakeVectorStore()
+    service = DocumentIngestService(
+        vector_store=vector_store,
+        embedding_provider=FakeEmbeddingProvider(),
+        chunker=HeadingAwareChunker(max_tokens=60, overlap_tokens=5),
+    )
+    content = "# Policy\n\nMFA is required."
+
+    asyncio.run(
+        service.ingest_document(
+            source_name="policy.pdf",
+            content=content,
+            tenant_id="default",
+        )
+    )
+
+    processed_path = tmp_path / "policy.md"
+    assert processed_path.read_text(encoding="utf-8") == content
+
+
+def test_ingest_service_saves_docling_xlsx_as_csv(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(DocumentIngestService, "PROCESSED_DATA_DIR", tmp_path)
+    service = DocumentIngestService(
+        vector_store=FakeVectorStore(),
+        embedding_provider=FakeEmbeddingProvider(),
+        chunker=HeadingAwareChunker(max_tokens=60, overlap_tokens=5),
+    )
+    content = "name,role\nAyse,admin\n"
+
+    asyncio.run(
+        service.ingest_document(
+            source_name="users.xlsx",
+            content=content,
+            tenant_id="default",
+            content_kind=ContentKind.TABULAR,
+        )
+    )
+
+    processed_path = tmp_path / "users.csv"
+    assert processed_path.read_text(encoding="utf-8") == content
+
+
+def test_ingest_service_skips_processed_file_for_plain_markdown(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(DocumentIngestService, "PROCESSED_DATA_DIR", tmp_path)
+    service = DocumentIngestService(
+        vector_store=FakeVectorStore(),
+        embedding_provider=FakeEmbeddingProvider(),
+        chunker=HeadingAwareChunker(max_tokens=60, overlap_tokens=5),
+    )
+
+    asyncio.run(
+        service.ingest_document(
+            source_name="policy.md",
+            content="# Policy\n\nMFA is required.",
+            tenant_id="default",
+        )
+    )
+
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_ingest_service_wraps_unexpected_errors() -> None:

@@ -8,9 +8,10 @@
 FROM python:3.13-slim AS builder
 
 # Keep runtime behavior predictable and logs visible in container environments.
+# UV bytecode compilation is intentionally omitted: pre-compiling large ML
+# packages like torch/transformers/docling makes Docker builds much slower.
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    UV_COMPILE_BYTECODE=1
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
@@ -40,20 +41,21 @@ WORKDIR /app
 # Runtime uses a non-root user.
 RUN useradd --create-home --shell /usr/sbin/nologin app
 
-# Copy the prebuilt venv with the final runtime owner.
-COPY --from=builder --chown=app:app /app/.venv /app/.venv
+# Copy the prebuilt venv without recursively chowning hundreds of MBs of ML deps.
+# The non-root runtime user only needs read/execute access.
+COPY --from=builder /app/.venv /app/.venv
 
-# Ensure runtime entrypoints like python and uvicorn stay executable after the venv copy.
-RUN find /app/.venv/bin -type f -exec chmod 755 {} +
+# Keep entrypoints executable without walking the whole venv tree.
+RUN chmod 755 /app/.venv/bin/python /app/.venv/bin/uvicorn
 
 # ==========================================
 # API image
 # ==========================================
 FROM runtime-base AS api
 
-# Model caches are mounted as Docker volumes in development; create the
-# mountpoint with the runtime user as owner so FastEmbed/HF can write to it.
-RUN mkdir -p /app/.cache/huggingface && chown -R app:app /app/.cache
+# Writable runtime directories used by local development mounts and model caches.
+RUN mkdir -p /app/.cache/huggingface /app/data/processed \
+    && chown -R app:app /app/.cache /app/data
 
 # Application code (also bind-mounted in development via compose).
 COPY --chown=app:app src ./src
