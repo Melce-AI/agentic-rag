@@ -13,7 +13,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# System dependencies (needed to build any wheels without prebuilt binaries).
+# Build-time only: needed to compile wheels that have no prebuilt binary.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -47,6 +47,14 @@ RUN --mount=type=cache,target=/root/.cache \
 FROM python:3.13-slim AS runtime-base
 
 WORKDIR /app
+
+# Runtime system libs shared by all services. These are not needed at build time
+# (wheels are pre-built) but are required by Docling's OpenCV dependency at runtime.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libxcb1 \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Runtime uses a non-root user.
 RUN useradd --create-home --shell /usr/sbin/nologin app
