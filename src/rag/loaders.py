@@ -1,3 +1,4 @@
+import importlib.util
 import io
 from collections.abc import Callable
 from pathlib import Path
@@ -12,6 +13,8 @@ from src.rag.models import (
 
 SUPPORTED_EXTENSIONS = tuple(sorted(file_type.value for file_type in DocumentFileType))
 
+_DOCLING_AVAILABLE = importlib.util.find_spec("docling") is not None
+
 
 def load_document(*, source_name: str | None, raw_content: bytes) -> LoadedDocument:
     """
@@ -21,6 +24,11 @@ def load_document(*, source_name: str | None, raw_content: bytes) -> LoadedDocum
     text with the parser its file type requires, and tags the result with the
     chunking strategy (``content_kind``) that text needs. Text-like types are
     decoded as UTF-8; binary types (PDF) are parsed into text.
+
+    Binary formats (PDF, DOCX, PPTX, XLSX) use Docling when installed for
+    ML-powered layout and table extraction. When Docling is absent the parser
+    falls back to lightweight libraries (pypdf, python-docx, python-pptx,
+    openpyxl) that extract plain text without structural analysis.
     """
     normalized_source_name = _normalize_source_name(source_name)
     file_type = _resolve_file_type(normalized_source_name)
@@ -61,6 +69,74 @@ def _parse_utf8_text(source_name: str, raw_content: bytes) -> str:
             "Document must be UTF-8 encoded text",
             details={"source_name": source_name},
         ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Lightweight fallback parsers (used when docling is not installed)
+# ---------------------------------------------------------------------------
+
+
+def _parse_pdf_lightweight(source_name: str, raw_content: bytes) -> str:
+    from pypdf import PdfReader
+
+    try:
+        reader = PdfReader(io.BytesIO(raw_content))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
+    except Exception as exc:
+        raise DocumentParseError(
+            details={"source_name": source_name, "error": str(exc)}
+        ) from exc
+
+
+def _parse_docx_lightweight(source_name: str, raw_content: bytes) -> str:
+    from docx import Document
+
+    try:
+        doc = Document(io.BytesIO(raw_content))
+        return "\n".join(p.text for p in doc.paragraphs if p.text)
+    except Exception as exc:
+        raise DocumentParseError(
+            details={"source_name": source_name, "error": str(exc)}
+        ) from exc
+
+
+def _parse_pptx_lightweight(source_name: str, raw_content: bytes) -> str:
+    from pptx import Presentation
+
+    try:
+        prs = Presentation(io.BytesIO(raw_content))
+        texts = [
+            shape.text
+            for slide in prs.slides
+            for shape in slide.shapes
+            if hasattr(shape, "text") and shape.text
+        ]
+        return "\n".join(texts)
+    except Exception as exc:
+        raise DocumentParseError(
+            details={"source_name": source_name, "error": str(exc)}
+        ) from exc
+
+
+def _parse_xlsx_lightweight(source_name: str, raw_content: bytes) -> str:
+    from openpyxl import load_workbook
+
+    try:
+        wb = load_workbook(io.BytesIO(raw_content), read_only=True, data_only=True)
+        rows = []
+        for ws in wb.worksheets:
+            for row in ws.iter_rows(values_only=True):
+                rows.append(",".join("" if c is None else str(c) for c in row))
+        return "\n".join(rows)
+    except Exception as exc:
+        raise DocumentParseError(
+            details={"source_name": source_name, "error": str(exc)}
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Docling parser (ML-powered; only instantiated when docling is installed)
+# ---------------------------------------------------------------------------
 
 
 class DoclingParser:
@@ -121,17 +197,31 @@ class DoclingParser:
         return result
 
 
-docling_parser = DoclingParser()
+# ---------------------------------------------------------------------------
+# Parser selection — Docling when available, lightweight fallback otherwise
+# ---------------------------------------------------------------------------
 
+if _DOCLING_AVAILABLE:
+    _docling_parser = DoclingParser()
+    _binary_parsers: dict[DocumentFileType, Callable[[str, bytes], str]] = {
+        DocumentFileType.PDF: _docling_parser.to_markdown,
+        DocumentFileType.DOCX: _docling_parser.to_markdown,
+        DocumentFileType.PPTX: _docling_parser.to_markdown,
+        DocumentFileType.XLSX: _docling_parser.to_csv_tables,
+    }
+else:
+    _binary_parsers = {
+        DocumentFileType.PDF: _parse_pdf_lightweight,
+        DocumentFileType.DOCX: _parse_docx_lightweight,
+        DocumentFileType.PPTX: _parse_pptx_lightweight,
+        DocumentFileType.XLSX: _parse_xlsx_lightweight,
+    }
 
 _PARSERS: dict[DocumentFileType, Callable[[str, bytes], str]] = {
     DocumentFileType.MARKDOWN: _parse_utf8_text,
     DocumentFileType.TEXT: _parse_utf8_text,
     DocumentFileType.CSV: _parse_utf8_text,
-    DocumentFileType.PDF: docling_parser.to_markdown,
-    DocumentFileType.DOCX: docling_parser.to_markdown,
-    DocumentFileType.PPTX: docling_parser.to_markdown,
-    DocumentFileType.XLSX: docling_parser.to_csv_tables,
+    **_binary_parsers,
 }
 
 

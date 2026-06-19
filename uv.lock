@@ -33,7 +33,6 @@ name = "agentic-rag"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "docling" },
     { name = "fastapi" },
     { name = "fastembed" },
     { name = "huggingface-hub" },
@@ -45,6 +44,7 @@ dependencies = [
     { name = "mcp", extra = ["cli"] },
     { name = "ollama" },
     { name = "openinference-semantic-conventions" },
+    { name = "openpyxl" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-instrumentation-fastapi" },
     { name = "opentelemetry-sdk" },
@@ -52,7 +52,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pypdf" },
+    { name = "python-docx" },
     { name = "python-multipart" },
+    { name = "python-pptx" },
     { name = "qdrant-client" },
     { name = "requests" },
     { name = "streamlit" },
@@ -65,10 +67,12 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
+ingest = [
+    { name = "docling" },
+]
 
 [package.metadata]
 requires-dist = [
-    { name = "docling", specifier = ">=2.104.0" },
     { name = "fastapi", specifier = ">=0.135.1" },
     { name = "fastembed", specifier = ">=0.7.3" },
     { name = "huggingface-hub", specifier = ">=1.17.0" },
@@ -80,6 +84,7 @@ requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=1.27.2" },
     { name = "ollama", specifier = ">=0.6.2" },
     { name = "openinference-semantic-conventions", specifier = ">=0.1.12" },
+    { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.28.0" },
     { name = "opentelemetry-instrumentation-fastapi", specifier = ">=0.49b0" },
     { name = "opentelemetry-sdk", specifier = ">=1.28.0" },
@@ -87,7 +92,9 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.7.1" },
     { name = "pypdf", specifier = ">=5.1.0" },
+    { name = "python-docx", specifier = ">=1.1.2" },
     { name = "python-multipart", specifier = ">=0.0.20" },
+    { name = "python-pptx", specifier = ">=1.0.2" },
     { name = "qdrant-client", specifier = ">=1.13.2" },
     { name = "requests", specifier = ">=2.32.5" },
     { name = "streamlit", specifier = ">=1.42.2" },
@@ -100,6 +107,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "ruff", specifier = ">=0.9.0" },
 ]
+ingest = [{ name = "docling", specifier = ">=2.104.0" }]
 
 [[package]]
 name = "altair"

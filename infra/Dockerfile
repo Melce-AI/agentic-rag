@@ -8,10 +8,9 @@
 FROM python:3.13-slim AS builder
 
 # Keep runtime behavior predictable and logs visible in container environments.
-# UV bytecode compilation is intentionally omitted: pre-compiling large ML
-# packages like torch/transformers/docling makes Docker builds much slower.
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1
 
 WORKDIR /app
 
@@ -24,11 +23,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
 
-# Install only locked, non-dev dependencies into the project venv.
+# Layer 1: main dependencies (no torch/ML — fast, cached on every non-ingest dep change).
 RUN --mount=type=cache,target=/root/.cache \
     uv sync \
     --locked \
     --no-dev \
+    --no-install-project
+
+# Layer 2: ingest group (docling + torch). Separate layer so main-dep changes above
+# do not invalidate this cache. Only reruns when the ingest group itself changes.
+RUN --mount=type=cache,target=/root/.cache \
+    uv sync \
+    --locked \
+    --no-dev \
+    --group ingest \
     --no-install-project
 
 # ==========================================
@@ -41,21 +49,20 @@ WORKDIR /app
 # Runtime uses a non-root user.
 RUN useradd --create-home --shell /usr/sbin/nologin app
 
-# Copy the prebuilt venv without recursively chowning hundreds of MBs of ML deps.
-# The non-root runtime user only needs read/execute access.
-COPY --from=builder /app/.venv /app/.venv
+# Copy the prebuilt venv with the final runtime owner.
+COPY --from=builder --chown=app:app /app/.venv /app/.venv
 
-# Keep entrypoints executable without walking the whole venv tree.
-RUN chmod 755 /app/.venv/bin/python /app/.venv/bin/uvicorn
+# Ensure runtime entrypoints like python and uvicorn stay executable after the venv copy.
+RUN find /app/.venv/bin -type f -exec chmod 755 {} +
 
 # ==========================================
 # API image
 # ==========================================
 FROM runtime-base AS api
 
-# Writable runtime directories used by local development mounts and model caches.
-RUN mkdir -p /app/.cache/huggingface /app/data/processed \
-    && chown -R app:app /app/.cache /app/data
+# Model caches are mounted as Docker volumes in development; create the
+# mountpoint with the runtime user as owner so FastEmbed/HF can write to it.
+RUN mkdir -p /app/.cache/huggingface && chown -R app:app /app/.cache
 
 # Application code (also bind-mounted in development via compose).
 COPY --chown=app:app src ./src
