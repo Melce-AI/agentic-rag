@@ -39,7 +39,7 @@ class DoclingParser:
     def to_csv_tables(self, source_name: str, raw_content: bytes) -> str:
         result = self._convert(source_name, raw_content)
         tables = [
-            table.export_to_dataframe().to_csv(index=False)
+            table.export_to_dataframe(doc=result.document).to_csv(index=False)
             for table in result.document.tables
         ]
         return "\n".join(tables)

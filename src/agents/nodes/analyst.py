@@ -9,12 +9,15 @@ the distilled ``retrieved_docs`` field, not the raw message trail, so the answer
 is grounded in evidence rather than the Researcher's internal reasoning steps.
 """
 
+import logging
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.agents.llm import get_chat_model
 from src.agents.state import AgentState
+
+log = logging.getLogger(__name__)
 
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "analyst_system.md"
 
@@ -56,8 +59,12 @@ async def analyst(state: AgentState) -> dict:
             verdict["reason"],
         ]
 
+    revision = state.get("revision_count", 0)
+    log.info("Analyst generating draft (revision=%d)", revision)
+
     response = await get_chat_model().ainvoke(
         [SystemMessage(content=_load_prompt()), HumanMessage(content="\n".join(parts))]
     )
 
+    log.debug("Draft answer: %d chars", len(response.content))
     return {"draft_answer": response.content, "messages": [response]}

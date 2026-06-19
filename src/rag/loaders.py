@@ -1,5 +1,8 @@
+import logging
 from collections.abc import Callable
 from pathlib import Path
+
+from opentelemetry import trace
 
 from src.core.exceptions import RagValidationError
 from src.rag.models import (
@@ -8,11 +11,15 @@ from src.rag.models import (
     LoadedDocument,
 )
 from src.rag.parsers import binary_parser
+from src.observability.tracing import traced
 
+log = logging.getLogger(__name__)
+log.info("Document parser selected: %s", type(binary_parser).__name__)
 
 SUPPORTED_EXTENSIONS = tuple(sorted(file_type.value for file_type in DocumentFileType))
 
 
+@traced("rag.parse", span_kind="CHAIN")
 def load_document(*, source_name: str | None, raw_content: bytes) -> LoadedDocument:
     """
     Converts uploaded bytes into the document used by ingest.
@@ -23,6 +30,19 @@ def load_document(*, source_name: str | None, raw_content: bytes) -> LoadedDocum
     """
     normalized_source_name = _normalize_source_name(source_name)
     file_type = _resolve_file_type(normalized_source_name)
+
+    span = trace.get_current_span()
+    span.set_attribute("input.value", normalized_source_name)
+    span.set_attribute("rag.source_name", normalized_source_name)
+    span.set_attribute("rag.file_type", file_type.value)
+    span.set_attribute("rag.parser", type(binary_parser).__name__)
+
+    log.info(
+        "Parsing '%s' as %s via %s",
+        normalized_source_name,
+        file_type.value,
+        type(binary_parser).__name__,
+    )
     content = _PARSERS[file_type](normalized_source_name, raw_content)
 
     if not content.strip():
@@ -31,6 +51,8 @@ def load_document(*, source_name: str | None, raw_content: bytes) -> LoadedDocum
             details={"source_name": normalized_source_name},
         )
 
+    span.set_attribute("output.value", f"{len(content)} chars")
+    log.debug("Parsed '%s': %d chars", normalized_source_name, len(content))
     return LoadedDocument(
         source_name=normalized_source_name,
         content=content,

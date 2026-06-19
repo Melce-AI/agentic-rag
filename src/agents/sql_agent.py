@@ -24,9 +24,12 @@ Run it (needs Postgres up):
 
 import asyncio
 import json
+import logging
 import os
 import sys
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 # TODO (rerank optimization): when the agent retrieves knowledge it goes through
 # the rag_search tool, which reranks candidates with a cross-encoder
@@ -188,6 +191,8 @@ async def run_agent(question: str) -> dict:
     settings = get_settings()
     backend = _make_backend(settings)
 
+    log.info("Agent starting (model=%s): %s", backend.model_name, question[:120])
+
     agent_span = trace.get_current_span()
     agent_span.set_attribute("input.value", question)
     agent_span.set_attribute("llm.model_name", backend.model_name)
@@ -226,9 +231,19 @@ async def run_agent(question: str) -> dict:
                 if not calls:
                     answer = assistant["content"] or "(no answer)"
                     agent_span.set_attribute("output.value", answer)
+                    log.info(
+                        "Agent done in %d step(s): %s",
+                        len(steps),
+                        answer[:120],
+                    )
                     return {"answer": answer, "steps": steps}
 
                 for call in calls:
+                    log.info(
+                        "Tool call: %s(%s)",
+                        call["name"],
+                        json.dumps(call["args"], ensure_ascii=False)[:120],
+                    )
                     with _tracer.start_as_current_span(
                         f"tool.{call['name']}"
                     ) as tool_span:
@@ -253,6 +268,9 @@ async def run_agent(question: str) -> dict:
                     messages.append(backend.tool_message(call, text))
 
             agent_span.set_attribute("output.value", "(max steps)")
+            log.warning(
+                "Agent stopped: reached max steps (%d)", settings.agent_max_steps
+            )
             return {"answer": "(agent stopped: reached max steps)", "steps": steps}
 
 

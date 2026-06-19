@@ -10,6 +10,7 @@ forced to return the ``AuditVerdict`` schema, so the routing decision reads a
 real ``bool`` instead of parsing free text (which would be fragile).
 """
 
+import logging
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -17,6 +18,8 @@ from pydantic import BaseModel, Field
 
 from src.agents.llm import get_chat_model
 from src.agents.state import AgentState
+
+log = logging.getLogger(__name__)
 
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "auditor_system.md"
 
@@ -67,12 +70,21 @@ async def auditor(state: AgentState) -> dict:
         ]
     )
 
+    revision = state.get("revision_count", 0) + 1
+    log.info("Auditor reviewing draft (revision=%d)", revision)
+
     judge = get_chat_model().with_structured_output(AuditVerdict)
     verdict: AuditVerdict = await judge.ainvoke(
         [SystemMessage(content=_load_prompt()), HumanMessage(content=human)]
     )
 
+    log.info(
+        "Audit verdict (revision=%d): faithful=%s — %s",
+        revision,
+        verdict.faithful,
+        verdict.reason[:120],
+    )
     return {
         "audit_verdict": verdict.model_dump(),
-        "revision_count": state.get("revision_count", 0) + 1,
+        "revision_count": revision,
     }
