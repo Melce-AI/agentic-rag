@@ -15,10 +15,10 @@ from pathlib import Path
 
 from langchain.agents import create_agent
 from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 
 from src.agents.llm import get_chat_model
 from src.agents.state import AgentState
-from src.agents.tools import get_tools
 
 log = logging.getLogger(__name__)
 
@@ -29,22 +29,22 @@ def _load_prompt() -> str:
     return _PROMPT_PATH.read_text(encoding="utf-8")
 
 
-async def researcher(state: AgentState) -> dict:
+async def researcher(state: AgentState, config: RunnableConfig) -> dict:
     """Run the research agent on the question and return the evidence it found.
+
+    Receives pre-fetched MCP tools via ``config["configurable"]["mcp_tools"]``
+    (loaded once at startup in app.py lifespan, bound to a persistent session).
+    No subprocess is spawned per call; tests inject a list of fake tools.
 
     Returns only the slice of AgentState this node owns:
       - ``retrieved_docs``: the tool results, for the Analyst to ground its answer
       - ``messages``: the agent's reasoning/tool trail (accumulated via the
         ``add_messages`` reducer in state.py)
     """
-    # Build the inner ReAct agent: chat model + MCP tools + system prompt.
-    # create_agent returns a compiled graph that drives the tool-calling loop.
-    # TODO: cache this — today it re-fetches tools / relaunches the MCP
-    # subprocess on every call, including each revision loop.
+    tools = config["configurable"]["mcp_tools"]
     revision = state.get("revision_count", 0)
     log.info("Researcher starting (revision=%d): %s", revision, state["question"][:120])
 
-    tools = await get_tools()
     agent = create_agent(get_chat_model(), tools, system_prompt=_load_prompt())
 
     result = await agent.ainvoke(
