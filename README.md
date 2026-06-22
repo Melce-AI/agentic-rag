@@ -27,48 +27,49 @@ This project is designed against each failure mode: a cyclical Auditor loop that
 ### System Topology
 
 ```mermaid
-flowchart TD
+flowchart LR
     User([User])
-    UI["Streamlit UI\nSSE · HITL · Citations"]
-    API["FastAPI\n/chat · /documents · /search · /agent"]
+    UI["Streamlit UI\nSSE · HITL · Citations\n(planned)"]:::planned
+    API["FastAPI\n/agent · /documents · /search"]
 
-    subgraph lg [LangGraph - stateful, cyclical]
+    subgraph lg [LangGraph — stateful, cyclical]
         R[Researcher]
         An[Analyst]
         Au[Auditor]
     end
 
-    subgraph mcp [MCP Server - process boundary]
+    subgraph mcp [MCP Server — stdio subprocess]
         TS[rag_search]
-        TL[read_logs]
-        TQ[sql_query - guarded]
-        TLT[list_tables]
-        TD[describe_table]
+        LL[list_log_files]
+        RL[read_logs]
+        LT[list_tables]
+        DT[describe_table]
+        SQ["sql_query (guarded)"]
     end
 
-    Redis[(Redis)]
     Qdrant[(Qdrant Hybrid Vector)]
     PG[(PostgreSQL)]
     Phoenix[Arize Phoenix]
+    Redis[(Redis — planned)]:::planned
 
-    User --> UI
-    UI --> API
-    API --> R
+    User -. planned .-> UI
+    UI -. planned .-> API
+    User --> API --> R
     R --> An --> Au
-    Au -->|hallucination retry| R
-    Au -->|interrupt on destructive SQL| UI
-    UI -->|approved resume| R
-    Au --> Redis
-    Redis -.-> R
-    R --> TS
-    R --> TL
-    R --> TQ
-    R --> TLT
-    R --> TD
+    Au -->|not faithful| R
+    Au -->|faithful / budget spent| END([END])
+
+    R --> TS & LL & RL & LT & DT & SQ
+
     TS --> Qdrant
-    TQ --> PG
-    API -.-> Phoenix
-    Au -.-> Phoenix
+    SQ --> PG
+
+    API -.->|OTEL| Phoenix
+
+    Au -. planned .-> Redis
+    Redis -. planned .-> R
+
+    classDef planned stroke-dasharray: 5 5
 ```
 
 ### Architecture Decisions
