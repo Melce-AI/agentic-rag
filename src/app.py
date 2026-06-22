@@ -18,7 +18,10 @@ from src.core.exception_handlers import (
 from src.core.context import request_id_var
 from src.core.exceptions import AppException
 from src.adapters.vector_store.qdrant import qdrant_manager
+from src.agents.checkpointer import create_checkpointer
+from src.agents.graph import build_graph
 from src.agents.tools import MCP_SERVER_NAME, create_mcp_client
+from src.core.config import get_settings
 from src.observability.logging import setup_logging
 from src.observability.tracing import setup_tracing
 from langchain_mcp_adapters.tools import load_mcp_tools
@@ -32,12 +35,17 @@ setup_tracing()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application is starting.")
+    settings = get_settings()
     await qdrant_manager.init_collection()
     mcp_client = create_mcp_client()
     async with mcp_client.session(MCP_SERVER_NAME) as session:
         app.state.mcp_tools = await load_mcp_tools(session)
         logger.info("MCP tools loaded: %s", [t.name for t in app.state.mcp_tools])
-        yield
+        async with create_checkpointer(settings.redis_url) as checkpointer:
+            app.state.checkpointer = checkpointer
+            app.state.graph = build_graph(checkpointer=checkpointer)
+            logger.info("Graph compiled with Redis checkpointer.")
+            yield
     logger.info("Application is shutting down.")
     await qdrant_manager.close()
     provider = trace.get_tracer_provider()

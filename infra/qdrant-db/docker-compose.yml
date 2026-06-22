@@ -2,7 +2,7 @@
 services:
   qdrant-db:
     image: qdrant/qdrant:v1.17.0
-    container_name: qdrant-db
+    container_name: agentic_rag_qdrant
     init: true 
     security_opt:
       - no-new-privileges:true

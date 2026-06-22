@@ -3,7 +3,7 @@
 services:
   postgres-db:
     image: postgres:17-alpine
-    container_name: postgres-db
+    container_name: agentic_rag_postgres
     init: true
     security_opt:
       - no-new-privileges:true

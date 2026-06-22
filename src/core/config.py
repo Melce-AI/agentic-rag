@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     #   passed at invoke time as config={"recursion_limit": ...}.
     agent_recursion_limit: int = 25
 
+    # Redis — LangGraph checkpoint store
+    redis_url: str = "redis://redis:6379"
+
     # Vector Database (Qdrant) Settings
     qdrant_host: str = "qdrant-db"
     qdrant_port: int = 6333
