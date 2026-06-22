@@ -7,6 +7,8 @@ include:
   - path: infra/qdrant-db/docker-compose.yml
   # PostgreSQL relational DB (Sentinel MCP sql_query tool)
   - path: infra/postgres/docker-compose.yml
+  # Redis — LangGraph checkpoint store
+  - path: infra/redis/docker-compose.yml
   # Frontend
   - path: infra/frontend/docker-compose.yml
   # Phoenix AI observability

@@ -1,0 +1,20 @@
+# Redis Stack — LangGraph checkpoint store
+# redis-stack-server includes the RediSearch module (FT.* commands) that
+# langgraph-checkpoint-redis uses for its vector index on checkpoints.
+# Plain redis:alpine does NOT include RediSearch.
+services:
+  redis:
+    image: redis/redis-stack-server:7.4.0-v3
+    container_name: agentic_rag_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    expose:
+      - 6379
+    networks:
+      - agentic-rag-network
+
+networks:
+  agentic-rag-network:
+    name: agentic-rag-network
+    external: true
