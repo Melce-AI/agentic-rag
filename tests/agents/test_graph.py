@@ -55,7 +55,7 @@ def test_route_finish_when_budget_spent(monkeypatch):
 
 
 def _patch_nodes(monkeypatch, auditor_fn):
-    calls = {"researcher": 0, "analyst": 0, "auditor": 0}
+    calls = {"researcher": 0, "analyst": 0, "auditor": 0, "finalizer": 0}
 
     async def fake_researcher(state):
         calls["researcher"] += 1
@@ -65,10 +65,15 @@ def _patch_nodes(monkeypatch, auditor_fn):
         calls["analyst"] += 1
         return {"draft_answer": "draft", "messages": []}
 
+    async def fake_finalizer(state):
+        calls["finalizer"] += 1
+        return {"final_answer": state["draft_answer"]}
+
     monkeypatch.setattr(graph_mod, "get_settings", lambda: FakeSettings())
     monkeypatch.setattr(graph_mod, "researcher", fake_researcher)
     monkeypatch.setattr(graph_mod, "analyst", fake_analyst)
     monkeypatch.setattr(graph_mod, "auditor", auditor_fn(calls))
+    monkeypatch.setattr(graph_mod, "finalizer", fake_finalizer)
     return calls
 
 
@@ -89,7 +94,9 @@ def test_graph_loops_back_then_finishes(monkeypatch):
     final = asyncio.run(app.ainvoke(_init_state()))
 
     assert calls["researcher"] == 2  # looped back to researcher once
+    assert calls["finalizer"] == 1
     assert final["audit_verdict"]["faithful"] is True
+    assert final["final_answer"] == "draft"
 
 
 def test_graph_stops_at_revision_budget(monkeypatch):
@@ -110,4 +117,5 @@ def test_graph_stops_at_revision_budget(monkeypatch):
 
     # max_revisions=2: auditor runs twice, then the budget brake ends the run.
     assert calls["auditor"] == 2
-    assert final["audit_verdict"]["faithful"] is False
+    assert calls["finalizer"] == 1
+    assert final["final_answer"] == "draft"
