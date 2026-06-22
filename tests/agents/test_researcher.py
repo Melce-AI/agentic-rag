@@ -25,15 +25,16 @@ def _state(question: str) -> dict:
     }
 
 
-def _patch(monkeypatch, fake_messages):
-    async def fake_get_tools():
-        return []
+def _fake_config() -> dict:
+    """Minimal config with empty tools — no subprocess is opened."""
+    return {"configurable": {"mcp_tools": []}}
 
+
+def _patch(monkeypatch, fake_messages):
     class FakeAgent:
         async def ainvoke(self, inputs):
             return {"messages": fake_messages}
 
-    monkeypatch.setattr(researcher_mod, "get_tools", fake_get_tools)
     monkeypatch.setattr(researcher_mod, "get_chat_model", lambda: object())
     monkeypatch.setattr(researcher_mod, "create_agent", lambda *a, **k: FakeAgent())
 
@@ -52,7 +53,7 @@ def test_researcher_extracts_tool_results(monkeypatch):
         ],
     )
 
-    out = asyncio.run(researcher_mod.researcher(_state("top product?")))
+    out = asyncio.run(researcher_mod.researcher(_state("top product?"), _fake_config()))
 
     assert out["retrieved_docs"] == [
         {"tool": "sql_query", "content": "Wireless Mouse | 174.93"}
@@ -64,7 +65,7 @@ def test_researcher_extracts_tool_results(monkeypatch):
 def test_researcher_no_tool_calls_yields_empty_docs(monkeypatch):
     _patch(monkeypatch, [AIMessage(content="I cannot answer that.")])
 
-    out = asyncio.run(researcher_mod.researcher(_state("???")))
+    out = asyncio.run(researcher_mod.researcher(_state("???"), _fake_config()))
 
     assert out["retrieved_docs"] == []
     assert len(out["messages"]) == 1

@@ -18,8 +18,10 @@ from src.core.exception_handlers import (
 from src.core.context import request_id_var
 from src.core.exceptions import AppException
 from src.adapters.vector_store.qdrant import qdrant_manager
+from src.agents.tools import MCP_SERVER_NAME, create_mcp_client
 from src.observability.logging import setup_logging
 from src.observability.tracing import setup_tracing
+from langchain_mcp_adapters.tools import load_mcp_tools
 
 
 logger = logging.getLogger(__name__)
@@ -31,7 +33,11 @@ setup_tracing()
 async def lifespan(app: FastAPI):
     logger.info("Application is starting.")
     await qdrant_manager.init_collection()
-    yield
+    mcp_client = create_mcp_client()
+    async with mcp_client.session(MCP_SERVER_NAME) as session:
+        app.state.mcp_tools = await load_mcp_tools(session)
+        logger.info("MCP tools loaded: %s", [t.name for t in app.state.mcp_tools])
+        yield
     logger.info("Application is shutting down.")
     await qdrant_manager.close()
     provider = trace.get_tracer_provider()

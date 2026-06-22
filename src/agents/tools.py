@@ -11,25 +11,24 @@ role and the ``ensure_read_only()`` guard (docs/mcp/sql_tool_design.md). Nodes
 must never touch a DB directly (AGENTS.md) — they go through this bridge so every
 tool call stays inside that guard.
 
-Transport note: we launch the MCP server as a stdio subprocess, mirroring
-``sql_agent.py``. ``env`` is forwarded so settings like ``POSTGRES_HOST`` reach
-the server (MCP sanitizes the env otherwise). With stdio, each tool invocation
-opens a fresh session; when the MCP server later runs as its own Docker service
-we will switch this connection to streamable-http (server.py already flags this).
+Lifecycle: ``create_mcp_client()`` is called once in app.py lifespan.
+``app.py`` opens a persistent ``client.session(MCP_SERVER_NAME)`` context,
+fetches tools once with ``load_mcp_tools(session)``, and stores them in
+``app.state.mcp_tools``. Nodes receive the pre-fetched list via
+``config["configurable"]["mcp_tools"]`` — no subprocess is spawned per request.
 """
 
 import os
 import sys
-from functools import lru_cache
 
-from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
+
+MCP_SERVER_NAME = "sentinel"
 
 
 def _connections() -> dict:
-    """How to reach each MCP server. One entry per server; we have one."""
     return {
-        "sentinel": {
+        MCP_SERVER_NAME: {
             "transport": "stdio",
             "command": sys.executable,
             "args": ["-m", "src.mcp_server.server"],
@@ -40,19 +39,8 @@ def _connections() -> dict:
     }
 
 
-@lru_cache
-def get_mcp_client() -> MultiServerMCPClient:
-    """Shared client. Construction is cheap (just stores the config); the actual
-    connection is opened lazily when tools are fetched or invoked."""
-    return MultiServerMCPClient(_connections())
-
-
-async def get_tools() -> list[BaseTool]:
-    """Return the MCP tools as LangChain tools.
-
-    Call this once when building the graph and bind the result to the model
-    (``model.bind_tools(tools)``) / hand it to a ``ToolNode``. The names match
-    the MCP tools: ``rag_search``, ``sql_query``, ``list_tables``,
-    ``describe_table``, ``list_log_files``, ``read_logs``.
+def create_mcp_client() -> MultiServerMCPClient:
+    """Return a configured client. Open a session with ``client.session(MCP_SERVER_NAME)``
+    to establish the persistent stdio connection — call once in the app lifespan.
     """
-    return await get_mcp_client().get_tools()
+    return MultiServerMCPClient(_connections())
