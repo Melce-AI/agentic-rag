@@ -1,3 +1,4 @@
+import json
 import logging
 import uuid
 from contextlib import asynccontextmanager
@@ -68,6 +69,9 @@ async def add_request_id_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())
     request.state.request_id = request_id
     token = request_id_var.set(request_id)
+    span = trace.get_current_span()
+    if span.is_recording():
+        span.set_attribute("metadata", json.dumps({"request_id": request_id}))
     try:
         response = await call_next(request)
         response.headers["X-Request-Id"] = request_id
