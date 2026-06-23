@@ -12,7 +12,9 @@ _ITERATIONS = 480_000
 def hash_password(password: str) -> str:
     """Üret: 'salt:hash' (kullanıcı oluştururken bir kere çalışır)."""
     salt = secrets.token_hex(16)
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), _ITERATIONS)
+    dk = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), bytes.fromhex(salt), _ITERATIONS
+    )
     return f"{salt}:{dk.hex()}"
 
 
@@ -22,7 +24,9 @@ def verify_password(password: str, stored: str) -> bool:
     if not stored or ":" not in stored:
         return False
     salt, expected = stored.split(":", 1)
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), _ITERATIONS)
+    dk = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), bytes.fromhex(salt), _ITERATIONS
+    )
     return hmac.compare_digest(dk.hex(), expected)
 
 

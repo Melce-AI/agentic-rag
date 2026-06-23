@@ -107,10 +107,8 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 15
 
     auth_user_email: str = "ece@qkare.com"
-    auth_user_password_hash: str = "8349bd0215f824bfba7c84e7c329743c:4e7966fc2c571782a56b1e582a15aff11eb4a3bb049a1489e6b58a3ddeb7c2c1"   
+    auth_user_password_hash: str = "8349bd0215f824bfba7c84e7c329743c:4e7966fc2c571782a56b1e582a15aff11eb4a3bb049a1489e6b58a3ddeb7c2c1"
     auth_user_roles: list[str] = ["admin"]
-
-
 
     # Environment Variables (.env) Reading Rules
     model_config = SettingsConfigDict(
