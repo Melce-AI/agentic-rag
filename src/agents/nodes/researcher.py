@@ -60,5 +60,24 @@ async def researcher(state: AgentState, config: RunnableConfig) -> dict:
         if isinstance(m, ToolMessage)
     ]
 
+    # Extract citable sources from rag_search results. The MCP adapter keeps the
+    # tool's structured output (MCPSearchResult fields) on the ToolMessage's
+    # `.artifact` (response_format="content_and_artifact"), so we read it directly
+    # — no parsing of the human-readable content string. Only rag_search yields
+    # citable sources; sql_query / read_logs do not.
+    sources: list[dict] = []
+    for m in messages:
+        if not isinstance(m, ToolMessage) or m.name != "rag_search":
+            continue
+        artifact = getattr(m, "artifact", None) or {}
+        structured = artifact.get("structured_content") or {}
+        for item in structured.get("result", []):
+            sources.append(
+                {
+                    "source_name": item.get("source_name", ""),
+                    "heading_path": item.get("heading_path", []),
+                }
+            )
+
     log.info("Researcher done: retrieved %d doc(s)", len(retrieved_docs))
-    return {"retrieved_docs": retrieved_docs, "messages": messages}
+    return {"retrieved_docs": retrieved_docs, "sources": sources, "messages": messages}
