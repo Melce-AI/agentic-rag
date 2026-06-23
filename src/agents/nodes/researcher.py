@@ -74,8 +74,10 @@ async def researcher(state: AgentState, config: RunnableConfig) -> dict:
         for item in structured.get("result", []):
             sources.append(
                 {
+                    "document_id": item.get("document_id", ""),
                     "source_name": item.get("source_name", ""),
                     "heading_path": item.get("heading_path", []),
+                    "text": item.get("text", ""),
                 }
             )
 
