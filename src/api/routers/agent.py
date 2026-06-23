@@ -7,29 +7,12 @@ tool-call trail it followed.
 
 from fastapi import APIRouter, Request
 from opentelemetry import trace
-from pydantic import BaseModel, Field
 
 from src.agents.sql_agent import run_agent
 from src.schemas.response import SuccessResponse
+from src.schemas.agent import AgentAnswer, AgentAskRequest
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
-
-
-class AgentAskRequest(BaseModel):
-    question: str = Field(
-        ..., min_length=1, examples=["En çok ciro yapan 3 ürün hangisi?"]
-    )
-
-
-class AgentStep(BaseModel):
-    tool: str
-    args: dict
-    result: str
-
-
-class AgentAnswer(BaseModel):
-    answer: str
-    steps: list[AgentStep]
 
 
 @router.post("/ask", response_model=SuccessResponse[AgentAnswer])
