@@ -9,7 +9,9 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/login", response_model=SuccessResponse[TokenResponse])
-async def login(payload: LoginRequest, request: Request) -> SuccessResponse[TokenResponse]:
+async def login(
+    payload: LoginRequest, request: Request
+) -> SuccessResponse[TokenResponse]:
     claims = await authenticate(payload.email, payload.password)
     token = create_access_token(claims)
     return SuccessResponse(
