@@ -35,6 +35,7 @@ dependencies = [
     "langgraph-checkpoint-redis>=0.0.1",
     "pyjwt[crypto]>=2.13.0",
     "langchain-openai>=0.2",
+    "openinference-instrumentation-langchain>=0.1.29",
 ]
 
 [dependency-groups]
