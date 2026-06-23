@@ -26,7 +26,13 @@ def get_chat_model() -> BaseChatModel:
     runnable without mutating this one, so sharing it between nodes is safe.
     """
     settings = get_settings()
-    return init_chat_model(
-        settings.agent_model,
-        temperature=settings.agent_temperature,
-    )
+    kwargs: dict = {"temperature": settings.agent_temperature}
+    # OpenAI-compatible gateways (e.g. OpenRouter) need an explicit base_url and
+    # key. init_chat_model forwards extra kwargs to the provider constructor, so
+    # we inject them only when a gateway URL is configured — the local/ollama
+    # path stays untouched.
+    if settings.agent_base_url:
+        kwargs["base_url"] = settings.agent_base_url
+        if settings.openai_api_key:
+            kwargs["api_key"] = settings.openai_api_key.get_secret_value()
+    return init_chat_model(settings.agent_model, **kwargs)
