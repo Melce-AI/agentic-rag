@@ -2,17 +2,28 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from src.api.routers import documents as documents_router
 from src.api.routers import search as search_router
 from src.app import app
+from src.auth.testing import override_auth
 from src.core.exceptions import RagEmbeddingError
 from src.rag.chunking import HeadingAwareChunker
 from src.rag.embeddings import FastEmbedProvider
 from src.rag.ingest import DocumentIngestService
 from src.rag.models import ContentKind, EmbeddedText, RetrievedChunk, SparseEmbedding
 from src.rag.retriever import HybridRetriever
+
+
+@pytest.fixture(autouse=True)
+def _bypass_auth():
+    """Protected endpoints (search, documents) now require a JWT; tests use a
+    fake user instead of minting real tokens."""
+    override_auth(app)
+    yield
+    app.dependency_overrides.clear()
 
 
 class FakeEmbeddingProvider:

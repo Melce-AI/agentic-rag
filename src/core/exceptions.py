@@ -244,3 +244,12 @@ class RagRerankError(RagError):
             status_code=500,
             details=details,
         )
+
+class AuthError(AppException):
+    def __init__(self, message: str, details: Optional[Any] = None):
+        super().__init__(
+            code="AUTH_401",
+            message=message,
+            status_code=401,
+            details=details,
+        )

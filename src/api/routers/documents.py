@@ -1,7 +1,8 @@
-from fastapi import APIRouter, File, Form, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from opentelemetry import trace
 from starlette.concurrency import run_in_threadpool
 
+from src.auth.dependencies import current_user
 from src.rag.ingest import DocumentIngestService
 from src.rag.loaders import load_document
 from src.schemas.documents import (
@@ -12,7 +13,9 @@ from src.schemas.documents import (
 )
 from src.schemas.response import SuccessResponse
 
-router = APIRouter(prefix="/documents", tags=["Documents"])
+router = APIRouter(
+    prefix="/documents", tags=["Documents"], dependencies=[Depends(current_user)]
+)
 document_ingest_service = DocumentIngestService()
 
 

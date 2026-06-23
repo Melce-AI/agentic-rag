@@ -21,11 +21,12 @@ from src.adapters.vector_store.qdrant import qdrant_manager
 from src.agents.checkpointer import create_checkpointer
 from src.agents.graph import build_graph
 from src.agents.tools import MCP_SERVER_NAME, create_mcp_client
+from src.auth.keys import load_private_key, load_public_key
 from src.core.config import get_settings
 from src.observability.logging import setup_logging
 from src.observability.tracing import setup_tracing
 from langchain_mcp_adapters.tools import load_mcp_tools
-
+from src.api.routers.auth import router as auth_router
 
 logger = logging.getLogger(__name__)
 setup_logging()
@@ -36,6 +37,11 @@ setup_tracing()
 async def lifespan(app: FastAPI):
     logger.info("Application is starting.")
     settings = get_settings()
+    # Fail fast: load the JWT signing keys at startup so a missing or malformed
+    # key crashes the app here with a clear error, not on the first /auth/login.
+    load_private_key()
+    load_public_key()
+    logger.info("JWT signing keys loaded.")
     await qdrant_manager.init_collection()
     mcp_client = create_mcp_client()
     async with mcp_client.session(MCP_SERVER_NAME) as session:
@@ -107,6 +113,7 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 app.include_router(documents_router)
 app.include_router(search_router)
 app.include_router(agent_router)
+app.include_router(auth_router)  # Include the auth router for login endpoint
 
 FastAPIInstrumentor.instrument_app(app, excluded_urls="/health")
 
