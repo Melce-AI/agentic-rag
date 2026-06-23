@@ -54,8 +54,15 @@ class Settings(BaseSettings):
     #   free/local : "ollama:llama3.1:8b"
     #   anthropic  : "anthropic:claude-opus-4-8"   (needs ANTHROPIC_API_KEY)
     #   openai     : "openai:gpt-4o"               (needs OPENAI_API_KEY)
+    #   openrouter : "openai:openai/gpt-4o-mini"   (set AGENT_BASE_URL + OPENAI_API_KEY)
     agent_model: str = "ollama:llama3.1:8b"
     agent_temperature: float = 0.0
+
+    # Optional OpenAI-compatible gateway base URL (e.g. OpenRouter:
+    # "https://openrouter.ai/api/v1"). When set, get_chat_model() forwards it
+    # plus OPENAI_API_KEY to the openai provider, so any OpenAI-wire-compatible
+    # backend works without a code change.
+    agent_base_url: Optional[str] = None
 
     # Loop brakes for the multi-agent graph (two layers, both needed):
     #   business brake — max Auditor -> Researcher revision loops before the

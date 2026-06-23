@@ -34,6 +34,7 @@ dependencies = [
     "openpyxl>=3.1.5",
     "langgraph-checkpoint-redis>=0.0.1",
     "pyjwt[crypto]>=2.13.0",
+    "langchain-openai>=0.2",
 ]
 
 [dependency-groups]

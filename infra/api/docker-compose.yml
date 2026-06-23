@@ -50,6 +50,7 @@ services:
 networks:
   agentic-rag-network:
     name: agentic-rag-network
+    external: true
 
 volumes:
   hf-cache:
