@@ -5,10 +5,12 @@ which MCP tools to call, runs read-only SQL, and returns a final answer plus the
 tool-call trail it followed.
 """
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from opentelemetry import trace
 
 from src.agents.sql_agent import run_agent
+from src.auth.claims import AuthClaims
+from src.auth.dependencies import current_user
 from src.schemas.response import SuccessResponse
 from src.schemas.agent import AgentAnswer, AgentAskRequest
 
@@ -16,7 +18,11 @@ router = APIRouter(prefix="/agent", tags=["Agent"])
 
 
 @router.post("/ask", response_model=SuccessResponse[AgentAnswer])
-async def agent_ask(payload: AgentAskRequest, request: Request):
+async def agent_ask(
+    payload: AgentAskRequest,
+    request: Request,
+    user: AuthClaims = Depends(current_user),
+):
     span = trace.get_current_span()
     span.set_attribute("openinference.span.kind", "AGENT")
     span.set_attribute("input.value", payload.question)

@@ -223,3 +223,7 @@ data/processed/
 
 .vscode/
 .claude/
+
+# JWT signing keys — never commit private/public PEM keys
+keys/
+*.pem

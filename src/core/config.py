@@ -100,6 +100,17 @@ class Settings(BaseSettings):
     # Reranking: a cross-encoder re-scores the candidates before top_k is cut.
     rag_rerank_enabled: bool = True
     rag_rerank_model: str = "BAAI/bge-reranker-base"
+    # JWT / Auth (RS256)
+    jwt_private_key_path: str = "keys/jwt_private.pem"
+    jwt_public_key_path: str = "keys/jwt_public.pem"
+    jwt_issuer: str = "agentic-rag-auth"
+    jwt_access_token_expire_minutes: int = 15
+
+    auth_user_email: str = "ece@qkare.com"
+    auth_user_password_hash: str = "8349bd0215f824bfba7c84e7c329743c:4e7966fc2c571782a56b1e582a15aff11eb4a3bb049a1489e6b58a3ddeb7c2c1"   
+    auth_user_roles: list[str] = ["admin"]
+
+
 
     # Environment Variables (.env) Reading Rules
     model_config = SettingsConfigDict(

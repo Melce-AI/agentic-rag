@@ -18,6 +18,10 @@ services:
     # Read-only bind mount is convenient for local development without letting the container mutate source.
     volumes:
       - ../../src:/app/src:ro
+      # JWT signing keys (gitignored, not baked into the image) — mounted
+      # read-only so the app can load them at startup. Generate with the
+      # openssl commands in docs/auth/jwt_auth_design.md.
+      - ../../keys:/app/keys:ro
       - ../../logs:/app/logs:rw
       - ../../data:/app/data:rw
       - hf-cache:/app/.cache/huggingface

@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from opentelemetry import trace
 
+from src.auth.dependencies import current_user
 from src.rag.retriever import HybridRetriever
 from src.schemas.response import SuccessResponse
 from src.schemas.search import SearchRequest, SearchResponseData, SearchResult
 
-router = APIRouter(prefix="/search", tags=["Search"])
+router = APIRouter(
+    prefix="/search", tags=["Search"], dependencies=[Depends(current_user)]
+)
 hybrid_retriever = HybridRetriever()
 
 
