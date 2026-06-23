@@ -69,3 +69,23 @@ def test_researcher_no_tool_calls_yields_empty_docs(monkeypatch):
 
     assert out["retrieved_docs"] == []
     assert len(out["messages"]) == 1
+
+
+def test_researcher_no_rag_search_yields_empty_sources(monkeypatch):
+    """Only rag_search yields sources; sql_query does not."""
+    _patch(
+        monkeypatch,
+        [
+            AIMessage(content="", tool_calls=[]),
+            ToolMessage(
+                content="Wireless Mouse | 174.93",
+                name="sql_query",
+                tool_call_id="call_1",
+            ),
+        ],
+    )
+
+    out = asyncio.run(researcher_mod.researcher(_state("top?"), _fake_config()))
+
+    assert out["sources"] == []
+

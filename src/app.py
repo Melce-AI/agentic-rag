@@ -27,6 +27,7 @@ from src.observability.logging import setup_logging
 from src.observability.tracing import setup_tracing
 from langchain_mcp_adapters.tools import load_mcp_tools
 from src.api.routers.auth import router as auth_router
+from src.api.routers.chat import router as chat_router
 
 logger = logging.getLogger(__name__)
 setup_logging()
@@ -114,6 +115,7 @@ app.include_router(documents_router)
 app.include_router(search_router)
 app.include_router(agent_router)
 app.include_router(auth_router)  # Include the auth router for login endpoint
+app.include_router(chat_router)  # Include the chat router for chat endpoint
 
 FastAPIInstrumentor.instrument_app(app, excluded_urls="/health")
 
