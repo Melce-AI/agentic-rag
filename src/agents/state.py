@@ -45,3 +45,8 @@ class AgentState(TypedDict):
 
     # Filled when the graph routes to END.
     final_answer: str
+
+    # Citable sources extracted from rag_search results (source_name + heading_path),
+    # for the Finalizer to append as citations. OVERWRITE — refreshed each revision,
+    # mirroring retrieved_docs (not accumulated).
+    sources: list[dict]
