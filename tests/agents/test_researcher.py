@@ -88,4 +88,3 @@ def test_researcher_no_rag_search_yields_empty_sources(monkeypatch):
     out = asyncio.run(researcher_mod.researcher(_state("top?"), _fake_config()))
 
     assert out["sources"] == []
-
