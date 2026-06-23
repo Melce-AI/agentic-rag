@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
+from opentelemetry import trace
 
 from src.auth.claims import AuthClaims
 from src.auth.dependencies import current_user
@@ -21,6 +22,9 @@ async def chat(
     user: AuthClaims = Depends(current_user),
 ):
     """Chat with the multi-agent graph."""
+    span = trace.get_current_span()
+    span.set_attribute("openinference.span.kind", "AGENT")
+    span.set_attribute("input.value", payload.question)
     graph = request.app.state.graph
     mcp_tools = request.app.state.mcp_tools
 
@@ -39,6 +43,7 @@ async def chat(
         config={
             "configurable": {
                 "mcp_tools": mcp_tools,
+                "tenant_id": payload.tenant_id,
                 "thread_id": payload.thread_id
                 or f"chat-{user.user_id}-{payload.tenant_id}",
             }
@@ -67,6 +72,9 @@ async def chat_stream(
     user: AuthClaims = Depends(current_user),
 ):
     """Chat with SSE streaming of agent trace events."""
+    span = trace.get_current_span()
+    span.set_attribute("openinference.span.kind", "AGENT")
+    span.set_attribute("input.value", payload.question)
     graph = request.app.state.graph
     mcp_tools = request.app.state.mcp_tools
 

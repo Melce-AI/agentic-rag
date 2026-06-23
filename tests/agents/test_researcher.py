@@ -27,7 +27,7 @@ def _state(question: str) -> dict:
 
 def _fake_config() -> dict:
     """Minimal config with empty tools — no subprocess is opened."""
-    return {"configurable": {"mcp_tools": []}}
+    return {"configurable": {"mcp_tools": [], "tenant_id": "default"}}
 
 
 def _patch(monkeypatch, fake_messages):

@@ -8,6 +8,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import StatusCode
+from openinference.instrumentation.langchain import LangChainInstrumentor
 
 from src.core.config import get_settings
 
@@ -33,6 +34,10 @@ def setup_tracing() -> None:
     )
     provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
+    # Instrument LangChain/LangGraph AFTER the provider is set, binding to it
+    # explicitly. This is what gives Phoenix named spans for each node, LLM
+    # call, retriever and tool — without it the trace lands but is unnamed.
+    LangChainInstrumentor().instrument(tracer_provider=provider)
     logger.info(
         "OpenTelemetry tracing initialized.",
         extra={"otlp_endpoint": settings.otel_exporter_otlp_endpoint},

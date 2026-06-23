@@ -42,10 +42,18 @@ async def researcher(state: AgentState, config: RunnableConfig) -> dict:
         ``add_messages`` reducer in state.py)
     """
     tools = config["configurable"]["mcp_tools"]
+    tenant_id = config["configurable"]["tenant_id"]
     revision = state.get("revision_count", 0)
     log.info("Researcher starting (revision=%d): %s", revision, state["question"][:120])
 
-    agent = create_agent(get_chat_model(), tools, system_prompt=_load_prompt())
+    # Inject the authenticated tenant into the system prompt so rag_search is
+    # always scoped to the caller's data. tenant_id is a security boundary from
+    # the request — it must come from here, never be chosen by the model.
+    prompt = _load_prompt() + (
+        f'\n\nThe current tenant is "{tenant_id}". Always pass exactly this '
+        "value as the tenant_id argument when calling rag_search."
+    )
+    agent = create_agent(get_chat_model(), tools, system_prompt=prompt)
 
     result = await agent.ainvoke(
         {"messages": [HumanMessage(content=state["question"])]}
