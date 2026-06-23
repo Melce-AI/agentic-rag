@@ -39,6 +39,7 @@ async def chat(
         config={
             "configurable": {
                 "mcp_tools": mcp_tools,
+                "tenant_id": payload.tenant_id,
                 "thread_id": payload.thread_id
                 or f"chat-{user.user_id}-{payload.tenant_id}",
             }
