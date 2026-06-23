@@ -18,6 +18,13 @@ services:
     environment:
       # API URL can be passed to streamline communication
       - CORE_API_URL=http://agentic_rag_api:8089
+      # Native widget theme (buttons/inputs); layout polish is CSS in app.py.
+      - STREAMLIT_THEME_BASE=light
+      - STREAMLIT_THEME_PRIMARY_COLOR=#6c75c1
+      - STREAMLIT_THEME_BACKGROUND_COLOR=#faf9f7
+      - STREAMLIT_THEME_SECONDARY_BACKGROUND_COLOR=#f1f0f4
+      - STREAMLIT_THEME_TEXT_COLOR=#3a3f4b
+      - STREAMLIT_THEME_FONT=sans serif
     restart: unless-stopped
     networks:
       - agentic-rag-network
@@ -25,3 +32,4 @@ services:
 networks:
   agentic-rag-network:
     name: agentic-rag-network
+    external: true
