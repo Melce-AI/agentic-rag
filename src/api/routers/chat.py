@@ -170,7 +170,7 @@ async def chat_stream(
                         )
                     )
 
-                elif kind == "on_chain_end" and name == "LangGraph":
+                elif kind == "on_chain_end" and name == "LangGraph" and node is None:
                     output = data.get("output") or {}
                     citations = [
                         Citation(

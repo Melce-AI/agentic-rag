@@ -5,7 +5,9 @@ asks questions answered by the multi-agent graph and grounded in citations.
 The UI is a pure HTTP client; all logic lives in the API.
 """
 
+import json
 import os
+import time
 
 import requests
 import streamlit as st
@@ -254,6 +256,14 @@ with left:
 
 
 # --- RIGHT: Ask ------------------------------------------------------------
+
+NODE_LABEL = {
+    "researcher": "Research Agent",
+    "analyst": "Analysis Agent",
+    "auditor": "Review Agent",
+    "finalizer": "Response Agent",
+}
+
 with right:
     st.markdown("<div class='eyebrow'>Ask</div>", True)
     st.markdown(
@@ -276,29 +286,81 @@ with right:
         if not question.strip():
             st.warning("Type a question first.")
         else:
-            with st.spinner("Researching, drafting and auditing…"):
-                try:
-                    resp = requests.post(
-                        f"{API_URL}/chat",
-                        json={
-                            "question": question.strip(),
-                            "tenant_id": tenant,
-                            "thread_id": None,
-                        },
-                        headers=auth_headers(),
-                        timeout=REQUEST_TIMEOUT,
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()["data"]
-                        st.session_state.last_answer = {
-                            "question": question.strip(),
-                            "answer": data.get("answer", ""),
-                            "citations": data.get("citations", []),
-                        }
-                    else:
+            try:
+                with requests.post(
+                    f"{API_URL}/chat/stream",
+                    json={
+                        "question": question.strip(),
+                        "tenant_id": tenant,
+                        "thread_id": None,
+                    },
+                    headers=auth_headers(),
+                    timeout=REQUEST_TIMEOUT,
+                    stream=True,
+                ) as resp:
+                    if resp.status_code != 200:
                         st.error(f"Error {resp.status_code}: {api_error(resp)}")
-                except Exception as exc:
-                    st.error(f"Request failed: {exc}")
+                    else:
+                        status = st.status("Agent thinking…", expanded=True)
+                        token_box = st.empty()
+
+                        for raw in resp.iter_lines():
+                            if not raw:
+                                continue
+                            line = raw.decode() if isinstance(raw, bytes) else raw
+                            if not line.startswith("data:"):
+                                continue
+                            event = json.loads(line[5:].strip())
+                            kind = event.get("type")
+                            node = event.get("node")
+                            data = event.get("data", {})
+
+                            if kind == "node_start":
+                                label = NODE_LABEL.get(node, node)
+                                status.write(f"{label}…")
+
+                            elif kind == "node_end" and node == "auditor":
+                                verdict = data.get("verdict", {})
+                                icon = "✓" if verdict.get("faithful") else "↩ revising"
+                                reason = verdict.get("reason", "")[:80]
+                                status.write(f"Review: {icon} — {reason}")
+
+                            elif kind == "tool_call":
+                                tool = data.get("tool", "tool")
+                                inp = data.get("input") or {}
+                                hint = (
+                                    inp.get("query") or inp.get("sql") or str(inp)[:60]
+                                )
+                                status.write(f"Tool Use: `{tool}` ← {hint}")
+
+                            elif kind == "final":
+                                status.update(
+                                    label="Done", state="complete", expanded=False
+                                )
+                                answer_text = data.get("answer", "")
+                                buf = ""
+                                for i, word in enumerate(answer_text.split(" ")):
+                                    buf += ("" if i == 0 else " ") + word
+                                    token_box.markdown(buf + " ▌")
+                                    time.sleep(0.012)
+                                token_box.empty()
+                                st.session_state.last_answer = {
+                                    "question": question.strip(),
+                                    "answer": answer_text,
+                                    "citations": data.get("citations", []),
+                                }
+
+                            elif kind == "error":
+                                status.update(
+                                    label="Error", state="error", expanded=True
+                                )
+                                msg = data.get(
+                                    "message", data.get("error", "Agent error")
+                                )
+                                st.error(f"[{data.get('code', 'ERR')}] {msg}")
+
+            except Exception as exc:
+                st.error(f"Request failed: {exc}")
 
     answer = st.session_state.last_answer
     if answer:
