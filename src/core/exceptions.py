@@ -254,3 +254,31 @@ class AuthError(AppException):
             status_code=401,
             details=details,
         )
+
+
+class AgentError(AppException):
+    def __init__(
+        self,
+        message: str,
+        code: str = "AGT_00",
+        status_code: int = 500,
+        details: Optional[Any] = None,
+    ):
+        super().__init__(
+            code=code,
+            message=message,
+            status_code=status_code,
+            details=details,
+        )
+
+
+class AgentGraphError(AgentError):
+    """Raised when the LangGraph agent graph fails during execution."""
+
+    def __init__(self, details: Optional[Any] = None):
+        super().__init__(
+            code="AGT_GRAPH_500",
+            message="Agent graph execution failed",
+            status_code=500,
+            details=details,
+        )
