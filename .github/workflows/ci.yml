@@ -60,6 +60,9 @@ jobs:
     # Only build+push after quality gates pass. On PRs we still build
     # (catches Dockerfile breakage early) but never push — only `main`
     # pushes to GHCR.
+    permissions:
+      contents: read
+      packages: write
     needs: quality
     runs-on: ubuntu-latest
     strategy:
