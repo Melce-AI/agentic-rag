@@ -13,6 +13,10 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read  # checkout action needs this
+  packages: read  # uv install needs this to fetch wheels from GH Packages
+
 # If you push twice quickly, cancel the older in-flight run for the same
 # branch/PR — saves CI minutes and gives you the latest result faster.
 concurrency:
@@ -51,3 +55,53 @@ jobs:
       # Gate 3 — tests. conftest.py disables OTel, so no Phoenix needed.
       - name: Tests (pytest)
         run: uv run pytest
+  build-and-push:
+    # Only build+push after quality gates pass. On PRs we still build
+    # (catches Dockerfile breakage early) but never push — only `main`
+    # pushes to GHCR.
+    needs: quality
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service: api
+            dockerfile: infra/api/Dockerfile
+            image: ghcr.io/melce-ai/agentic-rag-api
+          - service: frontend
+            dockerfile: infra/frontend/Dockerfile
+            image: ghcr.io/melce-ai/agentic-rag-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Only log in when we're actually going to push (main branch).
+      # PRs build locally on the runner without touching the registry.
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # git-sha tag, not `latest` — immutable, traceable to a commit.
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=sha,format=short
+
+      - name: Build (and push only on main)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
