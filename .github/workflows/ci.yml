@@ -55,6 +55,7 @@ jobs:
       # Gate 3 — tests. conftest.py disables OTel, so no Phoenix needed.
       - name: Tests (pytest)
         run: uv run pytest
+
   build-and-push:
     # Only build+push after quality gates pass. On PRs we still build
     # (catches Dockerfile breakage early) but never push — only `main`
@@ -65,17 +66,15 @@ jobs:
       matrix:
         include:
           - service: api
-            dockerfile: infra/api/Dockerfile
+            target: api
             image: ghcr.io/melce-ai/agentic-rag-api
           - service: frontend
-            dockerfile: infra/frontend/Dockerfile
+            target: frontend
             image: ghcr.io/melce-ai/agentic-rag-frontend
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
-
       # Only log in when we're actually going to push (main branch).
       # PRs build locally on the runner without touching the registry.
       - name: Log in to GHCR
@@ -85,7 +84,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       # git-sha tag, not `latest` — immutable, traceable to a commit.
       - name: Extract metadata
         id: meta
@@ -94,12 +92,12 @@ jobs:
           images: ${{ matrix.image }}
           tags: |
             type=sha,format=short
-
       - name: Build (and push only on main)
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: infra/Dockerfile
+          target: ${{ matrix.target }}
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
