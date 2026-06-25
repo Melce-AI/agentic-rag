@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from src.agents.llm import get_chat_model
 from src.agents.state import AgentState
 
+
 log = logging.getLogger(__name__)
 
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "auditor_system.md"
@@ -41,13 +42,31 @@ def _load_prompt() -> str:
     return _PROMPT_PATH.read_text(encoding="utf-8")
 
 
-def _format_evidence(docs: list[dict]) -> str:
-    if not docs:
+# TODO: evaluate whether the citation-honesty check (point 4 in auditor_system.md)
+# is worth duplicating _format_evidence here. LLMs are unreliable at cross-referencing
+# [N] numbers; factual grounding (points 1-3) is the real value. If dropped, the
+# auditor can receive raw sources in a simpler format and this function goes away.
+def _format_evidence(sources: list[dict], retrieved_docs: list[dict]) -> str:
+    entries: list[str] = []
+
+    for s in sources:
+        n = len(entries) + 1
+        name = s.get("source_name") or "unknown"
+        path = " > ".join(s.get("heading_path") or [])
+        header = f"[{n}] {name} > {path}" if path else f"[{n}] {name}"
+        entries.append(f"{header}\n{s.get('text', '')}")
+
+    for doc in retrieved_docs:
+        if doc.get("tool") == "rag_search":
+            continue
+        n = len(entries) + 1
+        entries.append(
+            f"[{n}] from {doc.get('tool', 'unknown')}:\n{doc.get('content', '')}"
+        )
+
+    if not entries:
         return "(no evidence was retrieved)"
-    return "\n\n".join(
-        f"[{i + 1}] from {doc.get('tool', 'unknown')}:\n{doc.get('content', '')}"
-        for i, doc in enumerate(docs)
-    )
+    return "\n\n".join(entries)
 
 
 async def auditor(state: AgentState) -> dict:
@@ -63,7 +82,7 @@ async def auditor(state: AgentState) -> dict:
             f"Question: {state['question']}",
             "",
             "Evidence:",
-            _format_evidence(state.get("retrieved_docs", [])),
+            _format_evidence(state.get("sources", []), state.get("retrieved_docs", [])),
             "",
             "Draft answer to audit:",
             state.get("draft_answer", ""),
