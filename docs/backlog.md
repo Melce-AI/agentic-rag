@@ -20,9 +20,10 @@ mapping), `AGENTS.md` (roadmap).
 ## Open items (by priority)
 
 ### High
-- [ ] **Real SSE streaming.** `/chat/stream` currently emits post-hoc simulated
-      events after `graph.ainvoke()` finishes. Replace with `graph.astream_events()`
-      so node/LLM/tool steps stream live. (Step 4)
+- [x] **Real SSE streaming.** Replaced post-hoc simulation with
+      `graph.astream_events(version="v2")`. Emits `node_start`, `node_end`,
+      `token`, `tool_call`, `tool_result`, and `final` events live as the graph
+      executes. Also fixed missing `tenant_id` in stream config. (Step 4)
 - [ ] **HITL approval flow.** Checkpointer is wired, but there is no `interrupt()`
       for destructive SQL and no approve/reject endpoint or UI. (Step 3 → 4)
 - [ ] **Evals pipeline.** Add Ragas (faithfulness, context precision), a golden
