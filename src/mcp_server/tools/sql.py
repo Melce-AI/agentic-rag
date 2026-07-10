@@ -11,9 +11,10 @@ import logging
 
 from mcp.server.fastmcp import FastMCP
 
-from src.adapters.sql.postgres import postgres_manager
+from src.adapters.sql.postgres import postgres_manager, postgres_write_manager
+from src.core.config import get_settings
 from src.core.exceptions import SqlGuardError, SqlStoreError
-from src.mcp_server.guards import ensure_read_only
+from src.mcp_server.guards import ensure_read_only, ensure_write_safe
 
 logger = logging.getLogger(__name__)
 
@@ -72,3 +73,31 @@ def register(mcp: FastMCP) -> None:
             return "Query returned no rows."
 
         return json.dumps(rows, default=str, ensure_ascii=False, indent=2)
+
+    @mcp.tool()
+    async def sql_execute(sql: str) -> str:
+        """Run a single WHERE-qualified UPDATE or DELETE on an operational table.
+
+        DESTRUCTIVE: this modifies data. It is the write half of the two-tier
+        SQL design and is gated by human approval in the agent graph before it
+        ever runs. Requirements enforced here by an independent guard, then by
+        the write-only DB role:
+          - exactly one UPDATE or DELETE statement (no SELECT/INSERT/DDL),
+          - a WHERE clause (an unqualified whole-table write is refused),
+          - a target table in the configured writable set.
+
+        Args:
+            sql: A single UPDATE or DELETE statement with a WHERE clause.
+        """
+        try:
+            safe_sql = ensure_write_safe(sql, get_settings().postgres_writable_tables)
+        except SqlGuardError as exc:
+            # A deliberate refusal — report it clearly so the model can correct.
+            return f"Write refused: {exc.message}"
+
+        try:
+            affected = await postgres_write_manager.run_write(safe_sql)
+        except SqlStoreError as exc:
+            return f"Write failed: {exc.message} ({exc.details})"
+
+        return f"Write applied: {affected} row(s) affected."
