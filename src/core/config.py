@@ -96,6 +96,18 @@ class Settings(BaseSettings):
     # Hard server-side cap on rows any single sql_query call may return.
     postgres_query_row_limit: int = 100
 
+    # Read-WRITE role — the HITL-gated `sql_execute` tool connects with this.
+    # A SECOND least-privilege role, distinct from sentinel_ro: it may run
+    # UPDATE/DELETE, but only on `postgres_writable_tables`, and every write is
+    # gated by human approval in the graph (executor node -> interrupt()).
+    postgres_rw_user: str = "sentinel_rw"
+    postgres_rw_password: SecretStr = SecretStr("sentinel_rw")
+    # The only tables the write tier may mutate — single source of truth. The
+    # write guard (ensure_write_safe) enforces it and the executor prompt lists
+    # it. Keep in sync with the GRANTs in
+    # infra/postgres/initdb/04_create_readwrite_role.sh.
+    postgres_writable_tables: list[str] = ["orders", "customers", "order_items"]
+
     # Advanced RAG Settings
     rag_dense_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     rag_sparse_model: str = "Qdrant/bm25"
