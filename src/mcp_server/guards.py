@@ -12,6 +12,7 @@ test exhaustively.
 """
 
 import re
+from collections.abc import Collection
 
 from src.core.exceptions import SqlGuardError
 
@@ -54,6 +55,40 @@ _FORBIDDEN_KEYWORDS = frozenset(
 # A read query must start with one of these.
 _ALLOWED_LEADING = ("select", "with")
 
+# A write query must start with one of these — no WITH, so a data-modifying CTE
+# cannot lead a write statement.
+_WRITE_ALLOWED_LEADING = ("update", "delete")
+
+# Statement-type keywords that must never appear in a write query. UPDATE/DELETE
+# syntax words (SET, FROM, WHERE, USING, RETURNING) and SELECT (legal inside a
+# subquery) are deliberately absent so they don't false-positive.
+_WRITE_FORBIDDEN = frozenset(
+    {
+        "insert",
+        "truncate",
+        "drop",
+        "alter",
+        "create",
+        "grant",
+        "revoke",
+        "merge",
+        "call",
+        "do",
+        "copy",
+        "vacuum",
+        "reindex",
+        "cluster",
+        "comment",
+        "lock",
+        "prepare",
+        "execute",
+        "savepoint",
+        "begin",
+        "commit",
+        "rollback",
+    }
+)
+
 _LINE_COMMENT = re.compile(r"--[^\n]*")
 _BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 _STRING_LITERAL = re.compile(r"'(?:[^']|'')*'")  # single-quoted values, '' escape
@@ -61,23 +96,26 @@ _QUOTED_IDENT = re.compile(r'"(?:[^"]|"")*"')  # double-quoted identifiers
 _WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
-def ensure_read_only(sql: str) -> str:
-    """Validate that ``sql`` is a single read-only statement; return it cleaned.
+def _clean_and_tokenize(sql: str) -> tuple[str, list[str]]:
+    """Strip comments, enforce a single statement, and tokenize.
+
+    Shared by ensure_read_only and ensure_write_safe: both need the same
+    comment/literal-safe view before applying their own (opposite) whitelist.
 
     Steps:
       1. strip comments — so a keyword cannot hide behind ``--`` or ``/* */``;
-      2. blank out string/identifier literals before scanning — so the word
-         ``delete`` inside a value is not mistaken for a DELETE statement, and a
-         ``;`` inside a string is not treated as a statement separator;
-      3. require exactly one statement;
-      4. require it to begin with SELECT or WITH;
-      5. reject any forbidden statement keyword anywhere in the query.
+      2. blank out string/identifier literals before scanning — so a keyword
+         inside a value is not read as a statement, and a ``;`` inside a string
+         is not treated as a statement separator;
+      3. require exactly one statement.
 
     Raises:
-        SqlGuardError: on any violation (a deliberate refusal, not a failure).
+        SqlGuardError: on empty input or more than one statement.
 
     Returns:
-        The comment-stripped, single statement (trailing ``;`` removed).
+        ``(body, tokens)`` — the cleaned single statement (trailing ``;``
+        removed, literals intact) and its lowercased word tokens scanned with
+        literals removed.
     """
     if not sql or not sql.strip():
         raise SqlGuardError("query must not be empty")
@@ -97,6 +135,25 @@ def ensure_read_only(sql: str) -> str:
     if not tokens:
         raise SqlGuardError("query has no executable statement")
 
+    return body, tokens
+
+
+def ensure_read_only(sql: str) -> str:
+    """Validate that ``sql`` is a single read-only statement; return it cleaned.
+
+    On top of the shared cleaning (``_clean_and_tokenize``) it:
+      - requires a SELECT/WITH leading keyword;
+      - rejects any forbidden statement keyword anywhere — which also catches
+        data-modifying CTEs like ``WITH x AS (DELETE ... RETURNING *) SELECT``.
+
+    Raises:
+        SqlGuardError: on any violation (a deliberate refusal, not a failure).
+
+    Returns:
+        The comment-stripped, single statement (trailing ``;`` removed).
+    """
+    body, tokens = _clean_and_tokenize(sql)
+
     if tokens[0] not in _ALLOWED_LEADING:
         raise SqlGuardError(
             f"only SELECT/WITH queries are allowed, got '{tokens[0].upper()}'"
@@ -107,6 +164,73 @@ def ensure_read_only(sql: str) -> str:
         raise SqlGuardError(
             "query contains forbidden keyword(s): "
             + ", ".join(keyword.upper() for keyword in forbidden)
+        )
+
+    return body
+
+
+def _target_table(verb: str, tokens: list[str]) -> str | None:
+    """Best-effort extraction of the mutated table from a write statement.
+
+    ``UPDATE [ONLY] <table> SET ...``  |  ``DELETE FROM [ONLY] <table> ...``.
+    Tables must be referenced unqualified (matching the sample schema); a
+    schema-qualified name won't match the writable set and is refused upstream.
+    """
+    if verb == "update":
+        rest = tokens[1:]
+    else:  # delete
+        if len(tokens) < 2 or tokens[1] != "from":
+            return None
+        rest = tokens[2:]
+    if rest and rest[0] == "only":
+        rest = rest[1:]
+    return rest[0] if rest else None
+
+
+def ensure_write_safe(sql: str, writable_tables: Collection[str]) -> str:
+    """Validate a single, WHERE-qualified UPDATE/DELETE on an allowed table.
+
+    The write-tier mirror of ensure_read_only. On top of the shared cleaning it:
+      1. requires a leading UPDATE or DELETE (no WITH — data-modifying CTEs are
+         refused outright);
+      2. rejects any other statement-type keyword (INSERT/TRUNCATE/DDL/...);
+      3. requires a WHERE clause — an unqualified UPDATE/DELETE that would touch
+         every row is refused *before* it ever reaches human approval;
+      4. requires the target table to be one of ``writable_tables``.
+
+    Raises:
+        SqlGuardError: on any violation (a deliberate refusal, not a failure).
+
+    Returns:
+        The comment-stripped, single statement (trailing ``;`` removed).
+    """
+    body, tokens = _clean_and_tokenize(sql)
+
+    verb = tokens[0]
+    if verb not in _WRITE_ALLOWED_LEADING:
+        raise SqlGuardError(
+            f"only UPDATE/DELETE statements are allowed here, got '{verb.upper()}'"
+        )
+
+    forbidden = sorted({token for token in tokens if token in _WRITE_FORBIDDEN})
+    if forbidden:
+        raise SqlGuardError(
+            "query contains forbidden keyword(s): "
+            + ", ".join(keyword.upper() for keyword in forbidden)
+        )
+
+    if "where" not in tokens:
+        raise SqlGuardError(
+            "a WHERE clause is required — an unqualified UPDATE/DELETE that "
+            "would affect every row is refused"
+        )
+
+    allowed = {name.lower() for name in writable_tables}
+    table = _target_table(verb, tokens)
+    if table is None or table not in allowed:
+        raise SqlGuardError(
+            f"table '{table or '?'}' is not writable; allowed: "
+            + ", ".join(sorted(allowed))
         )
 
     return body
