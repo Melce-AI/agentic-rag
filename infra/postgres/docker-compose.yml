@@ -14,6 +14,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-sentinel_db}
       # Password for the read-only role the MCP SQL tool connects with.
       SENTINEL_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:-sentinel_ro}
+      # Password for the read-WRITE role the HITL-gated sql_execute tool uses.
+      SENTINEL_RW_PASSWORD: ${POSTGRES_RW_PASSWORD:-sentinel_rw}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     expose:

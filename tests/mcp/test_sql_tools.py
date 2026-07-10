@@ -86,3 +86,69 @@ def test_describe_table_not_found(monkeypatch):
     out = _text(asyncio.run(mcp.call_tool("describe_table", {"table_name": "nope"})))
 
     assert "not found" in out.lower()
+
+
+# --- sql_execute (write tier) — guard exercised for real, adapter faked ---
+
+
+def test_sql_execute_refuses_write_without_where_before_touching_db(monkeypatch):
+    hit_db = False
+
+    async def _run(query, params=None):
+        nonlocal hit_db
+        hit_db = True
+        return 0
+
+    monkeypatch.setattr(sql.postgres_write_manager, "run_write", _run)
+    mcp = _build_mcp()
+
+    out = _text(
+        asyncio.run(
+            mcp.call_tool("sql_execute", {"sql": "UPDATE orders SET status='x'"})
+        )
+    )
+
+    assert "refused" in out.lower()
+    assert hit_db is False  # guard blocked it before any DB call
+
+
+def test_sql_execute_refuses_non_writable_table(monkeypatch):
+    async def _run(query, params=None):
+        raise AssertionError("run_write must not be called for a refused write")
+
+    monkeypatch.setattr(sql.postgres_write_manager, "run_write", _run)
+    mcp = _build_mcp()
+
+    out = _text(
+        asyncio.run(
+            mcp.call_tool(
+                "sql_execute",
+                {"sql": "UPDATE products SET unit_price=0 WHERE product_id=1"},
+            )
+        )
+    )
+
+    assert "refused" in out.lower()
+
+
+def test_sql_execute_applies_valid_write(monkeypatch):
+    captured = {}
+
+    async def _run(query, params=None):
+        captured["sql"] = query
+        return 1
+
+    monkeypatch.setattr(sql.postgres_write_manager, "run_write", _run)
+    mcp = _build_mcp()
+
+    out = _text(
+        asyncio.run(
+            mcp.call_tool(
+                "sql_execute",
+                {"sql": "UPDATE orders SET status='cancelled' WHERE order_id=8"},
+            )
+        )
+    )
+
+    assert "1 row" in out
+    assert captured["sql"].startswith("UPDATE orders")
