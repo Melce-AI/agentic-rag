@@ -17,7 +17,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from src.agents.llm import get_chat_model
-from src.agents.state import AgentState
+from src.agents.knowledge_base.state import AgentState
 
 
 log = logging.getLogger(__name__)

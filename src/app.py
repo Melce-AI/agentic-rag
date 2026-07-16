@@ -20,7 +20,7 @@ from src.core.exceptions import AppException
 from src.adapters.vector_store.qdrant import qdrant_manager
 from src.agents.checkpointer import create_checkpointer
 from src.agents.graph import build_graph
-from src.agents.tools import MCP_SERVER_NAME, create_mcp_client
+from src.agents.mcp_client import MCP_SERVER_NAME, create_mcp_client
 from src.auth.keys import load_private_key, load_public_key
 from src.core.config import get_settings
 from src.observability.logging import setup_logging

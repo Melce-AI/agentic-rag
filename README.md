@@ -104,7 +104,8 @@ flowchart LR
 src/
 ├── api/          routers/       — thin HTTP entrypoint, no business logic
 ├── rag/          chunking · embeddings · ingest · retriever · reranker · parsers
-├── agents/       graph (operator + build_rag_graph) · rag_tool (knowledge_base_qa) · service · state · nodes · prompts/
+├── agents/       graph (operator) · service · models · mcp_client · llm · checkpointer · prompts/
+│   └── knowledge_base/  graph (RAG pipeline) · tool (knowledge_base_qa) · state · nodes/ · prompts/
 ├── mcp_server/   server · tools/ (rag_search · read_logs · sql read+write · list_tables · describe_table)
 ├── evals/        datasets/ · ragas_runner.py
 ├── adapters/     vector_store/qdrant.py · sql/postgres.py

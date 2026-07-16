@@ -7,8 +7,8 @@ and increments revision_count. No live LLM (AGENTS.md).
 
 import asyncio
 
-from src.agents.nodes import auditor as auditor_mod
-from src.agents.nodes.auditor import AuditVerdict
+from src.agents.knowledge_base.nodes import auditor as auditor_mod
+from src.agents.knowledge_base.nodes.auditor import AuditVerdict
 
 
 def _state(**overrides) -> dict:

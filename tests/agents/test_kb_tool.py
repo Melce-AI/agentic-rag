@@ -8,7 +8,7 @@ No live LLM/MCP — the compiled subgraph is replaced with a fake.
 
 import asyncio
 
-from src.agents import rag_tool
+from src.agents.knowledge_base import tool as rag_tool
 
 
 class _FakeGraph:

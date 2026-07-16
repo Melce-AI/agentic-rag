@@ -34,7 +34,7 @@ def get_rag_graph():
     """Return the compiled RAG subgraph, building it once on first use."""
     global _rag_graph
     if _rag_graph is None:
-        from src.agents.graph import build_rag_graph
+        from src.agents.knowledge_base.graph import build_rag_graph
 
         _rag_graph = build_rag_graph()
     return _rag_graph
