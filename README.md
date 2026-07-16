@@ -29,47 +29,45 @@ This project is designed against each failure mode: a cyclical Auditor loop that
 ```mermaid
 flowchart LR
     User([User])
-    UI["Streamlit UI\nSSE · HITL · Citations\n(planned)"]:::planned
-    API["FastAPI\n/agent · /documents · /search"]
+    UI["Streamlit UI\nSSE · HITL approval · Citations"]
+    API["FastAPI\n/chat · /chat/approve|reject · /documents · /search"]
 
-    subgraph lg [LangGraph — stateful, cyclical]
+    Op["Operator (ReAct agent)\ninterrupt_on sql_execute"]
+
+    subgraph lg [knowledge_base_qa — RAG subgraph, cyclical]
         R[Researcher]
         An[Analyst]
         Au[Auditor]
+        Fi[Finalizer]
     end
 
     subgraph mcp [MCP Server — stdio subprocess]
         TS[rag_search]
-        LL[list_log_files]
         RL[read_logs]
         LT[list_tables]
         DT[describe_table]
-        SQ["sql_query (guarded)"]
+        SQ["sql_query (read, guarded)"]
+        SX["sql_execute (write, guarded)"]
     end
 
     Qdrant[(Qdrant Hybrid Vector)]
     PG[(PostgreSQL)]
     Phoenix[Arize Phoenix]
-    Redis[(Redis — planned)]:::planned
+    Redis[(Redis checkpoint)]
 
-    User -. planned .-> UI
-    UI -. planned .-> API
-    User --> API --> R
+    User --> UI --> API --> Op
+    Op -->|documents| lg
     R --> An --> Au
     Au -->|not faithful| R
-    Au -->|faithful / budget spent| END([END])
+    Au -->|faithful / budget spent| Fi
+    R --> TS --> Qdrant
 
-    R --> TS & LL & RL & LT & DT & SQ
-
-    TS --> Qdrant
-    SQ --> PG
+    Op -->|data| SQ --> PG
+    Op --> RL & LT & DT
+    Op -->|change: HITL pause → approve| SX --> PG
 
     API -.->|OTEL| Phoenix
-
-    Au -. planned .-> Redis
-    Redis -. planned .-> R
-
-    classDef planned stroke-dasharray: 5 5
+    Op <--> Redis
 ```
 
 ### Architecture Decisions
@@ -78,7 +76,7 @@ flowchart LR
 |---|---|---|
 | 1 | **MCP as internal process boundary** | Credentials cannot live in agent code. The process boundary enforces Principle of Least Privilege — a compromised agent cannot reach raw DB handles or `os.environ` on the data layer. A service layer in the same process doesn't provide this guarantee. |
 | 2 | **Cyclical LangGraph over linear chains** | Recovery requires a graph. A linear chain ships a hallucinated answer. The `Auditor → Researcher` loop re-retrieves with an enriched query on every faithfulness failure; linear chains cannot express this control flow. |
-| 3 | **HITL via `interrupt()` + Redis checkpoint** | Destructive SQL (`DELETE`, `UPDATE`) suspends the graph, surfaces a diff to the user, and resumes cleanly from the last checkpoint on approval. The agent never discards intermediate state regardless of the human decision. |
+| 3 | **HITL via `HumanInTheLoopMiddleware` + Redis checkpoint** | The operator holds `sql_execute` behind `interrupt_on={"sql_execute": True}`, so a destructive `UPDATE`/`DELETE` suspends the graph at the exact tool-call boundary — "approved == executed". The approval surfaces the SQL plus an affected-rows preview (the operator runs a `SELECT` with the same `WHERE` first). The pause is automatic; the resume is an external `/chat/approve|reject` request → `Command(resume=...)`, resuming cleanly from the Redis checkpoint regardless of the decision. |
 | 4 | **Hybrid search + cross-encoder reranking** | Dense-only misses exact terms; BM25-only misses paraphrase. RRF fuses both into a Top-20 candidate set; a BGE cross-encoder then scores each query-chunk pair directly, not just embedding similarity, for Top-5. |
 | 5 | **Docling with lightweight fallback** | ML-powered layout analysis (table detection, heading structure) when docling is installed; pypdf/python-docx fallback otherwise. The parser is resolved once at process startup — no runtime branching overhead. |
 | 6 | **CI/CD faithfulness gate** | Quality regressions should fail the build, not reach production. A Ragas faithfulness score < 0.85 on any PR blocks merge to `main` — the same guarantee a failing unit test provides for code correctness. |
@@ -106,8 +104,8 @@ flowchart LR
 src/
 ├── api/          routers/       — thin HTTP entrypoint, no business logic
 ├── rag/          chunking · embeddings · ingest · retriever · reranker · parsers
-├── agents/       graph · state · nodes (researcher/analyst/auditor) · prompts/
-├── mcp_server/   server · tools/ (rag_search · read_logs · sql · list_tables · describe_table)
+├── agents/       graph (operator + build_rag_graph) · rag_tool (knowledge_base_qa) · service · state · nodes · prompts/
+├── mcp_server/   server · tools/ (rag_search · read_logs · sql read+write · list_tables · describe_table)
 ├── evals/        datasets/ · ragas_runner.py
 ├── adapters/     vector_store/qdrant.py · sql/postgres.py
 ├── observability/ logging · tracing
@@ -122,7 +120,7 @@ Dependency direction (enforced): `api / mcp → agents → rag → adapters → 
 | Layer | Technology | Rationale |
 |---|---|---|
 | API | FastAPI | Async-native, SSE support, OTEL hooks |
-| Orchestration | LangGraph | Cyclical graphs, `interrupt()` for HITL, Redis checkpointer built-in |
+| Orchestration | LangGraph + `create_agent` | Top-level ReAct operator; cyclical RAG subgraph; `HumanInTheLoopMiddleware` for HITL; Redis checkpointer built-in |
 | Vector DB | Qdrant | Native hybrid search (dense + sparse); payload filtering for multi-tenancy |
 | Embeddings | FastEmbed | Fully local, no external API dependency |
 | Reranking | BGE-Reranker | Cross-encoder pair scoring; runs entirely offline |
@@ -165,7 +163,7 @@ A UUID is generated at the API gateway, injected into `request_id_var` (a Python
 | **1** | Advanced RAG — heading-aware chunking, hybrid search (dense + BM25 + RRF), BGE cross-encoder reranking | ✅ Done |
 | **2** | MCP Server — `rag_search`, `read_logs`, guarded `sql_query`, `list_tables`, `describe_table` | ✅ Done |
 | **3** | Multi-Agent — LangGraph Researcher · Analyst · Auditor with self-reflection loop + revision budget | ✅ Done |
-| **4** | UI/UX — SSE trace stream, source citations, HITL approval | ⬜ Planned |
+| **4** | Operator + HITL — ReAct operator over RAG-as-tool + SQL; SSE trace, citations, human approval for destructive `sql_execute` | ✅ Done |
 | **5** | CI/CD Evals — Ragas faithfulness gate on GitHub Actions | ⬜ Planned |
 
 **Infrastructure & cross-cutting concerns complete:**
@@ -177,6 +175,7 @@ A UUID is generated at the API gateway, injected into `request_id_var` (a Python
 - Docling document parsing (PDF layout analysis, table detection) with automatic lightweight fallback
 - Qdrant collection with dense + sparse (BM25) vector configuration
 - Read-only SQL enforcement: guard layer + `sentinel_ro` DB role
+- HITL-gated writes: `ensure_write_safe` guard + `sentinel_rw` DB role, executed only after human approval
 
 ---
 

@@ -50,8 +50,10 @@ async def lifespan(app: FastAPI):
         logger.info("MCP tools loaded: %s", [t.name for t in app.state.mcp_tools])
         async with create_checkpointer(settings.redis_url) as checkpointer:
             app.state.checkpointer = checkpointer
-            app.state.graph = build_graph(checkpointer=checkpointer)
-            logger.info("Graph compiled with Redis checkpointer.")
+            app.state.graph = build_graph(
+                mcp_tools=app.state.mcp_tools, checkpointer=checkpointer
+            )
+            logger.info("Operator graph compiled with Redis checkpointer.")
             yield
     logger.info("Application is shutting down.")
     await qdrant_manager.close()

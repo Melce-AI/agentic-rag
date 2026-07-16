@@ -7,6 +7,8 @@ returned inside the shared SuccessResponse envelope; SSE events stream raw but
 stay typed.
 """
 
+from typing import Annotated, Literal, Union
+
 from pydantic import BaseModel, Field
 
 
@@ -26,8 +28,44 @@ class Citation(BaseModel):
 
 
 class ChatAnswer(BaseModel):
+    # Literal discriminator so the /chat response union resolves unambiguously.
+    status: Literal["answer"] = "answer"
     answer: str
     citations: list[Citation]
+
+
+class PendingApproval(BaseModel):
+    """A destructive write the operator wants to run, awaiting human approval.
+
+    Returned by /chat when the operator paused on ``sql_execute``. The client
+    shows ``sql`` (the exact statement that will run — "approved == executed")
+    and calls /chat/approve/{thread_id} or /chat/reject/{thread_id}.
+    """
+
+    status: Literal["pending_approval"] = "pending_approval"
+    thread_id: str
+    tool: str
+    sql: str
+    description: str
+
+
+# The /chat endpoint returns one of these; ``status`` discriminates them.
+ChatResult = Annotated[
+    Union[ChatAnswer, PendingApproval], Field(discriminator="status")
+]
+
+
+class RejectRequest(BaseModel):
+    """Optional body for /chat/reject — a reason relayed back to the model."""
+
+    reason: str | None = None
+    tenant_id: str | None = None  # so a continued turn can still retrieve docs
+
+
+class ApproveRequest(BaseModel):
+    """Optional body for /chat/approve."""
+
+    tenant_id: str | None = None  # so a continued turn can still retrieve docs
 
 
 class TraceEvent(BaseModel):

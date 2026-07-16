@@ -41,7 +41,10 @@ async def researcher(state: AgentState, config: RunnableConfig) -> dict:
       - ``messages``: the agent's reasoning/tool trail (accumulated via the
         ``add_messages`` reducer in state.py)
     """
-    tools = config["configurable"]["mcp_tools"]
+    # Scope the Researcher to document retrieval only (plan, decision 7): it must
+    # hold rag_search and nothing else — never sql_execute. SQL and log tools live
+    # on the top-level operator; document retrieval is this subgraph's whole job.
+    tools = [t for t in config["configurable"]["mcp_tools"] if t.name == "rag_search"]
     tenant_id = config["configurable"]["tenant_id"]
     revision = state.get("revision_count", 0)
     log.info("Researcher starting (revision=%d): %s", revision, state["question"][:120])
@@ -53,6 +56,17 @@ async def researcher(state: AgentState, config: RunnableConfig) -> dict:
         f'\n\nThe current tenant is "{tenant_id}". Always pass exactly this '
         "value as the tenant_id argument when calling rag_search."
     )
+
+    # On a revision loop, fold in the Auditor's critique so the Researcher issues
+    # a BETTER query this time, not just so the Analyst redrafts (plan, decision
+    # 6 — mirror how analyst.py uses the same critique). Only on revisions.
+    verdict = state.get("audit_verdict") or {}
+    if revision > 0 and verdict.get("reason"):
+        prompt += (
+            "\n\nYour previous evidence was judged insufficient. Critique to "
+            f"address by retrieving better/more targeted evidence:\n{verdict['reason']}"
+        )
+
     agent = create_agent(get_chat_model(), tools, system_prompt=prompt)
 
     result = await agent.ainvoke(

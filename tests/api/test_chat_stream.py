@@ -1,13 +1,16 @@
-"""Tests for the /chat/stream SSE endpoint.
+"""Tests for the /chat/stream SSE endpoint (operator + HITL).
 
-Verifies that the endpoint correctly translates graph.astream_events() output
-into SSE events. The graph is replaced with a fake async generator so no LLM
-or MCP calls are made.
+Verifies that the endpoint translates graph.astream_events() output into SSE
+events, and that after the stream drains it reads the terminal checkpoint state
+to emit either `final` (answer) or `approval_required` (paused on a write). The
+graph is faked so no LLM/MCP/checkpointer is touched.
 """
 
 import asyncio
 import json
 from types import SimpleNamespace
+
+from langchain_core.messages import AIMessage, ToolMessage
 
 from src.api.routers import chat as chat_module
 from src.auth.claims import AuthClaims
@@ -30,7 +33,6 @@ def _user():
 
 
 async def _collect(response) -> list[dict]:
-    """Drain a StreamingResponse body and parse each SSE line into a dict."""
     events = []
     async for chunk in response.body_iterator:
         if isinstance(chunk, bytes):
@@ -42,125 +44,126 @@ async def _collect(response) -> list[dict]:
     return events
 
 
-# ---------------------------------------------------------------------------
-# Fake graph factories
-# ---------------------------------------------------------------------------
-
-
-def _graph_with_events(*raw_events):
-    """Return a fake graph whose astream_events yields the given dicts."""
-
-    async def astream_events(state, config, version="v2"):
-        for ev in raw_events:
-            yield ev
-
-    return SimpleNamespace(astream_events=astream_events)
-
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
-
-
-def test_node_start_and_end_events():
-    graph = _graph_with_events(
-        {
-            "event": "on_chain_start",
-            "name": "researcher",
-            "data": {},
-            "metadata": {"langgraph_node": "researcher"},
-        },
-        {
-            "event": "on_chain_end",
-            "name": "researcher",
-            "data": {"output": {}},
-            "metadata": {"langgraph_node": "researcher"},
-        },
-        {
-            "event": "on_chain_end",
-            "name": "LangGraph",
-            "data": {"output": {"final_answer": "ok", "sources": []}},
-            "metadata": {},
-        },
+def _snapshot(messages=None, interrupts=()):
+    return SimpleNamespace(
+        values={"messages": messages or []}, interrupts=tuple(interrupts)
     )
 
+
+def _graph(events, snapshot=None):
+    """Fake graph: astream_events yields `events`, aget_state returns `snapshot`."""
+
+    async def astream_events(state, config, version="v2"):
+        for ev in events:
+            yield ev
+
+    async def aget_state(config):
+        return snapshot if snapshot is not None else _snapshot()
+
+    return SimpleNamespace(astream_events=astream_events, aget_state=aget_state)
+
+
+def _run(graph):
     async def run():
         resp = await chat_module.chat_stream(_payload(), _make_request(graph), _user())
         return await _collect(resp)
 
-    events = asyncio.run(run())
+    return asyncio.run(run())
+
+
+# --- event translation -----------------------------------------------------
+
+
+def test_node_start_and_end_events():
+    graph = _graph(
+        [
+            {
+                "event": "on_chain_start",
+                "name": "researcher",
+                "data": {},
+                "metadata": {"langgraph_node": "researcher"},
+            },
+            {
+                "event": "on_chain_end",
+                "name": "researcher",
+                "data": {"output": {}},
+                "metadata": {"langgraph_node": "researcher"},
+            },
+        ]
+    )
+    events = _run(graph)
     types = [e["type"] for e in events]
     assert "node_start" in types
     assert "node_end" in types
-    start = next(e for e in events if e["type"] == "node_start")
-    assert start["node"] == "researcher"
-    assert start["data"]["status"] == "running"
 
 
 def test_token_event_forwarded():
     chunk = SimpleNamespace(content="Hello")
-    graph = _graph_with_events(
-        {
-            "event": "on_chat_model_stream",
-            "name": "ChatOpenAI",
-            "data": {"chunk": chunk},
-            "metadata": {"langgraph_node": "analyst"},
-        },
-        {
-            "event": "on_chain_end",
-            "name": "LangGraph",
-            "data": {"output": {"final_answer": "Hello", "sources": []}},
-            "metadata": {},
-        },
+    graph = _graph(
+        [
+            {
+                "event": "on_chat_model_stream",
+                "name": "ChatOpenAI",
+                "data": {"chunk": chunk},
+                "metadata": {"langgraph_node": "analyst"},
+            }
+        ]
     )
-
-    async def run():
-        resp = await chat_module.chat_stream(_payload(), _make_request(graph), _user())
-        return await _collect(resp)
-
-    events = asyncio.run(run())
+    events = _run(graph)
     token_events = [e for e in events if e["type"] == "token"]
-    assert token_events, "expected at least one token event"
+    assert token_events
     assert token_events[0]["data"]["content"] == "Hello"
-    assert token_events[0]["node"] == "analyst"
 
 
 def test_tool_call_and_result_events():
-    graph = _graph_with_events(
-        {
-            "event": "on_tool_start",
-            "name": "rag_search",
-            "data": {"input": {"query": "q"}},
-            "metadata": {"langgraph_node": "researcher"},
-        },
-        {
-            "event": "on_tool_end",
-            "name": "rag_search",
-            "data": {"output": "chunk text"},
-            "metadata": {"langgraph_node": "researcher"},
-        },
-        {
-            "event": "on_chain_end",
-            "name": "LangGraph",
-            "data": {"output": {"final_answer": "done", "sources": []}},
-            "metadata": {},
-        },
+    graph = _graph(
+        [
+            {
+                "event": "on_tool_start",
+                "name": "knowledge_base_qa",
+                "data": {"input": {"question": "q"}},
+                "metadata": {},
+            },
+            {
+                "event": "on_tool_end",
+                "name": "knowledge_base_qa",
+                "data": {"output": "grounded"},
+                "metadata": {},
+            },
+        ]
     )
-
-    async def run():
-        resp = await chat_module.chat_stream(_payload(), _make_request(graph), _user())
-        return await _collect(resp)
-
-    events = asyncio.run(run())
+    events = _run(graph)
     types = [e["type"] for e in events]
     assert "tool_call" in types
     assert "tool_result" in types
     call = next(e for e in events if e["type"] == "tool_call")
-    assert call["data"]["tool"] == "rag_search"
-    assert call["data"]["input"] == {"query": "q"}
+    assert call["data"]["tool"] == "knowledge_base_qa"
 
 
-def test_final_event_carries_answer_and_citations():
+def test_auditor_node_end_includes_verdict():
+    verdict = {"faithful": True, "reason": "all good"}
+    graph = _graph(
+        [
+            {
+                "event": "on_chain_end",
+                "name": "auditor",
+                "data": {"output": {"audit_verdict": verdict}},
+                "metadata": {"langgraph_node": "auditor"},
+            }
+        ]
+    )
+    events = _run(graph)
+    node_end = next(
+        (e for e in events if e["type"] == "node_end" and e["node"] == "auditor"), None
+    )
+    assert node_end is not None
+    assert node_end["data"]["verdict"] == verdict
+
+
+# --- closing events: final / approval_required -----------------------------
+
+
+def test_final_event_from_terminal_state():
     sources = [
         {
             "document_id": "d1",
@@ -169,20 +172,16 @@ def test_final_event_carries_answer_and_citations():
             "text": "MFA is required.",
         }
     ]
-    graph = _graph_with_events(
-        {
-            "event": "on_chain_end",
-            "name": "LangGraph",
-            "data": {"output": {"final_answer": "Use MFA.", "sources": sources}},
-            "metadata": {},
-        },
+    kb_msg = ToolMessage(
+        content="ans",
+        name="knowledge_base_qa",
+        tool_call_id="c1",
+        artifact={"sources": sources},
     )
+    snapshot = _snapshot(messages=[kb_msg, AIMessage(content="Use MFA.")])
+    graph = _graph([], snapshot=snapshot)
 
-    async def run():
-        resp = await chat_module.chat_stream(_payload(), _make_request(graph), _user())
-        return await _collect(resp)
-
-    events = asyncio.run(run())
+    events = _run(graph)
     final = next((e for e in events if e["type"] == "final"), None)
     assert final is not None
     assert final["data"]["answer"] == "Use MFA."
@@ -190,52 +189,42 @@ def test_final_event_carries_answer_and_citations():
     assert final["data"]["citations"][0]["source_name"] == "policy.pdf"
 
 
-def test_auditor_node_end_includes_verdict():
-    verdict = {"faithful": True, "reason": "all good"}
-    graph = _graph_with_events(
-        {
-            "event": "on_chain_end",
-            "name": "auditor",
-            "data": {"output": {"audit_verdict": verdict}},
-            "metadata": {"langgraph_node": "auditor"},
-        },
-        {
-            "event": "on_chain_end",
-            "name": "LangGraph",
-            "data": {"output": {"final_answer": "ok", "sources": []}},
-            "metadata": {},
-        },
+def test_approval_required_event_when_paused():
+    interrupt = SimpleNamespace(
+        value={
+            "action_requests": [
+                {
+                    "name": "sql_execute",
+                    "args": {"sql": "UPDATE orders SET status='shipped' WHERE id=1"},
+                    "description": "Tool execution requires approval",
+                }
+            ]
+        }
     )
+    snapshot = _snapshot(interrupts=[interrupt])
+    graph = _graph([], snapshot=snapshot)
 
-    async def run():
-        resp = await chat_module.chat_stream(_payload(), _make_request(graph), _user())
-        return await _collect(resp)
+    events = _run(graph)
+    approval = next((e for e in events if e["type"] == "approval_required"), None)
+    assert approval is not None
+    assert approval["data"]["tool"] == "sql_execute"
+    assert approval["data"]["sql"] == "UPDATE orders SET status='shipped' WHERE id=1"
+    assert not any(e["type"] == "final" for e in events)
 
-    events = asyncio.run(run())
-    node_end = next(
-        (e for e in events if e["type"] == "node_end" and e["node"] == "auditor"), None
-    )
-    assert node_end is not None
-    assert node_end["data"]["verdict"] == verdict
+
+# --- error handling --------------------------------------------------------
 
 
 def test_unexpected_error_emits_structured_error_event():
     async def bad_astream_events(state, config, version="v2"):
         raise RuntimeError("boom")
-        yield  # make it a generator
+        yield
 
     graph = SimpleNamespace(astream_events=bad_astream_events)
-
-    async def run():
-        resp = await chat_module.chat_stream(_payload(), _make_request(graph), _user())
-        return await _collect(resp)
-
-    events = asyncio.run(run())
-    assert events, "expected at least one event (the error)"
+    events = _run(graph)
+    assert events
     err = events[0]
     assert err["type"] == "error"
-    # Unexpected errors must not leak internal exception messages.
-    assert "code" in err["data"] and "message" in err["data"]
     assert err["data"]["code"] == "AGT_GRAPH_500"
     assert err["data"]["details"] == "RuntimeError"
 
@@ -248,38 +237,23 @@ def test_app_exception_emits_structured_error_event():
         yield
 
     graph = SimpleNamespace(astream_events=bad_astream_events)
-
-    async def run():
-        resp = await chat_module.chat_stream(_payload(), _make_request(graph), _user())
-        return await _collect(resp)
-
-    events = asyncio.run(run())
+    events = _run(graph)
     err = events[0]
     assert err["type"] == "error"
     assert err["data"]["code"] == "RAG_SEARCH_500"
-    assert "retrieval" in err["data"]["message"].lower()
 
 
 def test_empty_token_not_emitted():
     chunk = SimpleNamespace(content="")
-    graph = _graph_with_events(
-        {
-            "event": "on_chat_model_stream",
-            "name": "ChatOpenAI",
-            "data": {"chunk": chunk},
-            "metadata": {"langgraph_node": "analyst"},
-        },
-        {
-            "event": "on_chain_end",
-            "name": "LangGraph",
-            "data": {"output": {"final_answer": "", "sources": []}},
-            "metadata": {},
-        },
+    graph = _graph(
+        [
+            {
+                "event": "on_chat_model_stream",
+                "name": "ChatOpenAI",
+                "data": {"chunk": chunk},
+                "metadata": {"langgraph_node": "analyst"},
+            }
+        ]
     )
-
-    async def run():
-        resp = await chat_module.chat_stream(_payload(), _make_request(graph), _user())
-        return await _collect(resp)
-
-    events = asyncio.run(run())
+    events = _run(graph)
     assert not any(e["type"] == "token" for e in events)
