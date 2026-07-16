@@ -18,8 +18,8 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from opentelemetry import trace
 
+from src.agents.models import TurnResult
 from src.agents.service import (
-    TurnResult,
     build_config,
     peek_pending,
     read_result,

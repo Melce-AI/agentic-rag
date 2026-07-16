@@ -10,7 +10,7 @@ import asyncio
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from src.agents.nodes import researcher as researcher_mod
+from src.agents.knowledge_base.nodes import researcher as researcher_mod
 
 
 def _state(question: str) -> dict:

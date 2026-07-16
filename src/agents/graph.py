@@ -1,35 +1,19 @@
-"""Graph wiring for the agent layer.
+"""The top-level operator graph (Vision Step 4) — the graph the app compiles.
 
-Two graphs live here, one nested inside the other (Design B — see
-docs/agents/hitl_operator_plan.md):
+A single ReAct agent (``create_agent``) that drives everything:
+- answers document questions via ``knowledge_base_qa`` (the RAG subgraph as a
+  tool — see ``src/agents/knowledge_base/``),
+- reads data via the SQL read tools + ``read_logs``,
+- performs a change via ``sql_execute``, gated by ``HumanInTheLoopMiddleware`` so
+  a human Approves/Rejects before the write runs ("approved == executed").
 
-1. ``build_rag_graph`` — the multi-agent RAG pipeline (Vision Step 3):
-   Researcher -> Analyst -> Auditor, with a conditional edge from the Auditor
-   that either loops back to the Researcher (draft not faithful — re-retrieve
-   with the critique in hand) or routes to Finalizer -> END.
+    START -> operator (ReAct, interrupt_on sql_execute) -> END
+              tools: knowledge_base_qa, sql_query, list_tables,
+                     describe_table, read_logs, list_log_files, sql_execute
 
-       Researcher -> Analyst -> Auditor
-                                  |- not faithful & budget left -> Researcher (cycle)
-                                  |- faithful OR budget spent    -> Finalizer -> END
-
-   It is no longer the top-level graph: it is exposed to the operator as the
-   ``knowledge_base_qa`` tool (src/agents/rag_tool.py), so document Q&A keeps its
-   self-reflection / faithfulness loop.
-
-2. ``build_graph`` — the top-level operator (Vision Step 4). A single ReAct agent
-   (``create_agent``) that reads documents via ``knowledge_base_qa``, reads data
-   via the SQL read tools + ``read_logs``, and performs a change via
-   ``sql_execute`` — which is gated by ``HumanInTheLoopMiddleware`` so a human
-   Approves/Rejects before the write runs.
-
-       START -> operator (ReAct, interrupt_on sql_execute) -> END
-                 tools: knowledge_base_qa, sql_query, list_tables,
-                        describe_table, read_logs, list_log_files, sql_execute
-
-Two brakes stop the RAG loop from running forever:
-  - agent_max_revisions (business): route_after_audit gives up after N loops.
-  - recursion_limit (infrastructure): LangGraph's hard cap, passed at invoke as
-    config={"recursion_limit": settings.agent_recursion_limit}.
+Design B — a single operator that can interleave read → understand → act, rather
+than an up-front read/write router that would trap the flow. See
+docs/agents/hitl_operator_plan.md.
 """
 
 import logging
@@ -38,16 +22,9 @@ from pathlib import Path
 from langchain.agents import create_agent
 from langchain.agents.middleware import HumanInTheLoopMiddleware
 from langchain_core.tools import BaseTool
-from langgraph.graph import END, START, StateGraph
 
-from src.agents.nodes.analyst import analyst
-from src.agents.nodes.auditor import auditor
-from src.agents.nodes.finalizer import finalizer
-from src.agents.nodes.researcher import researcher
 from src.agents.llm import get_chat_model
-from src.agents.rag_tool import knowledge_base_qa
-from src.agents.state import AgentState
-from src.core.config import get_settings
+from src.agents.knowledge_base.tool import knowledge_base_qa
 
 log = logging.getLogger(__name__)
 
@@ -71,60 +48,6 @@ _OPERATOR_MCP_TOOLS = frozenset(
         WRITE_TOOL_NAME,
     }
 )
-
-
-def route_after_audit(state: AgentState) -> str:
-    """Decide where to go after the Auditor.
-
-    Pure routing: it only reads state and returns a label — it never mutates
-    state. (Mutation happens in nodes; routing happens in edges.)
-    """
-    verdict = state.get("audit_verdict") or {}
-    revision_count = state.get("revision_count", 0)
-    if verdict.get("faithful"):
-        log.info("Routing: faithful → finish (revision=%d)", revision_count)
-        return "finish"
-    if revision_count >= get_settings().agent_max_revisions:
-        log.warning(
-            "Routing: revision budget exhausted (%d/%d) → finish",
-            revision_count,
-            get_settings().agent_max_revisions,
-        )
-        return "finish"
-    log.info("Routing: not faithful → revise (revision=%d)", revision_count)
-    return "revise"
-
-
-def build_rag_graph(checkpointer=None):
-    """Compile the Researcher -> Analyst -> Auditor (loop) RAG subgraph.
-
-    Behaviour is unchanged from the original top-level pipeline; it is now a
-    reusable subgraph invoked by the ``knowledge_base_qa`` tool. Pass a
-    checkpointer to persist state across steps; None compiles without one (the
-    subgraph runs to completion inside a single tool call, so it needs none).
-    """
-    g = StateGraph(AgentState)
-
-    g.add_node("researcher", researcher)
-    g.add_node("analyst", analyst)
-    g.add_node("auditor", auditor)
-    g.add_node("finalizer", finalizer)
-
-    g.add_edge(START, "researcher")
-    g.add_edge("researcher", "analyst")
-    g.add_edge("analyst", "auditor")
-
-    # The conditional edge is where the cycle is born: the router's label picks
-    # the next node, and "revise" points back to an earlier node (researcher).
-    g.add_conditional_edges(
-        "auditor",
-        route_after_audit,
-        {"revise": "researcher", "finish": "finalizer"},
-    )
-
-    g.add_edge("finalizer", END)
-
-    return g.compile(checkpointer=checkpointer)
 
 
 def _load_operator_prompt() -> str:

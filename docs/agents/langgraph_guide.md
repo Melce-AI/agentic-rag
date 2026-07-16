@@ -232,11 +232,11 @@ async def researcher(state: AgentState) -> dict:
 İşin kalbi. Burada `StateGraph` kurar, düğümleri ekler, kenarları çizersin.
 
 ```python
-# ÖRNEK — agents/graph.py
+# ÖRNEK — agents/knowledge_base/graph.py
 from langgraph.graph import StateGraph, START, END
-from src.agents.state import AgentState
+from src.agents.knowledge_base.state import AgentState
 
-def build_graph(checkpointer=None):
+def build_rag_graph(checkpointer=None):
     g = StateGraph(AgentState)
 
     # 1) düğümleri kaydet

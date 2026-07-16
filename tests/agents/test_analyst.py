@@ -9,7 +9,7 @@ import asyncio
 
 from langchain_core.messages import AIMessage
 
-from src.agents.nodes import analyst as analyst_mod
+from src.agents.knowledge_base.nodes import analyst as analyst_mod
 
 
 def _state(**overrides) -> dict:

@@ -15,12 +15,12 @@ state), and is resumed later by a separate HTTP request (Approve/Reject).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from langgraph.types import Command
 
+from src.agents.models import PendingWrite, TurnResult
 from src.core.config import get_settings
 
 log = logging.getLogger(__name__)
@@ -37,35 +37,6 @@ def _reject_decision(message: str | None) -> dict:
     if message:
         decision["message"] = message
     return decision
-
-
-@dataclass
-class PendingWrite:
-    """A destructive tool call paused for human approval.
-
-    Neutral (no HTTP/DTO knowledge): the router maps this to a PendingApproval
-    DTO. ``sql`` is the exact statement that will run if approved — "approved ==
-    executed" is inherent to the interrupt-on-tool-call gate.
-    """
-
-    thread_id: str
-    tool: str
-    sql: str
-    description: str
-
-
-@dataclass
-class TurnResult:
-    """The outcome of a turn: either an answer, or a pending write to approve."""
-
-    thread_id: str
-    answer: str = ""
-    citations: list[dict] = field(default_factory=list)
-    pending: PendingWrite | None = None
-
-    @property
-    def is_pending(self) -> bool:
-        return self.pending is not None
 
 
 def build_config(mcp_tools: list[BaseTool], tenant_id: str, thread_id: str) -> dict:
