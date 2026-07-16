@@ -1,3 +1,9 @@
+"""DTOs for the deprecated ``/agent/ask`` endpoint (legacy single-agent loop).
+
+Superseded by ``schemas/chat.py`` + ``/chat``. Kept only for the deprecated
+endpoint; do not use for new work.
+"""
+
 from pydantic import BaseModel, Field
 
 

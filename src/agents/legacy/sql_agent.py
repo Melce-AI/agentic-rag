@@ -1,4 +1,11 @@
-"""A minimal real agent: an LLM that answers questions over the database by
+"""DEPRECATED — superseded by the LangGraph operator (``src/agents/graph.py``).
+
+Kept for reference only (see ``src/agents/legacy/__init__.py``): a hand-written
+single-agent ReAct loop that predates the operator + ``knowledge_base`` pipeline.
+Still wired to the deprecated ``/agent/ask`` endpoint. Do not build on it — new
+work goes through the operator (``/chat``).
+
+A minimal real agent: an LLM that answers questions over the database by
 calling the Sentinel MCP tools itself.
 
 Unlike ``dev_client.py`` (which calls tools with hard-coded arguments), here the
@@ -19,7 +26,7 @@ guard + read-only DB role still refuse any write.
 
 Run it (needs Postgres up):
     HF_TOKEN=hf_xxx POSTGRES_HOST=localhost \
-        uv run --no-sync python -m src.agents.sql_agent "your question"
+        uv run --no-sync python -m src.agents.legacy.sql_agent "your question"
 """
 
 import asyncio
@@ -45,7 +52,7 @@ from src.observability.tracing import get_tracer, traced
 log = logging.getLogger(__name__)
 _tracer = get_tracer(__name__)
 
-_PROMPT_PATH = Path(__file__).parent / "prompts" / "sql_agent_system.md"
+_PROMPT_PATH = Path(__file__).parent / "sql_agent_system.md"
 
 
 def _load_system_prompt() -> str:
