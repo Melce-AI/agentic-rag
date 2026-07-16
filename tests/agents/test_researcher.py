@@ -88,3 +88,66 @@ def test_researcher_no_rag_search_yields_empty_sources(monkeypatch):
     out = asyncio.run(researcher_mod.researcher(_state("top?"), _fake_config()))
 
     assert out["sources"] == []
+
+
+def _patch_capturing(monkeypatch):
+    """Patch create_agent to capture the (tools, system_prompt) it was built with."""
+    captured = {}
+
+    class FakeAgent:
+        async def ainvoke(self, inputs):
+            return {"messages": [AIMessage(content="done")]}
+
+    def fake_create_agent(model, tools, system_prompt="", **kwargs):
+        captured["tools"] = tools
+        captured["prompt"] = system_prompt
+        return FakeAgent()
+
+    monkeypatch.setattr(researcher_mod, "get_chat_model", lambda: object())
+    monkeypatch.setattr(researcher_mod, "create_agent", fake_create_agent)
+    return captured
+
+
+def test_researcher_scoped_to_rag_search_only(monkeypatch):
+    """The researcher must receive rag_search only — never SQL/write tools."""
+    from types import SimpleNamespace
+
+    captured = _patch_capturing(monkeypatch)
+    config = {
+        "configurable": {
+            "mcp_tools": [
+                SimpleNamespace(name="rag_search"),
+                SimpleNamespace(name="sql_query"),
+                SimpleNamespace(name="sql_execute"),
+            ],
+            "tenant_id": "default",
+        }
+    }
+
+    asyncio.run(researcher_mod.researcher(_state("q"), config))
+
+    tool_names = [t.name for t in captured["tools"]]
+    assert tool_names == ["rag_search"]
+
+
+def test_researcher_folds_critique_on_revision(monkeypatch):
+    """On a revision, the auditor critique is folded into the researcher prompt."""
+    captured = _patch_capturing(monkeypatch)
+    state = _state("q")
+    state["revision_count"] = 1
+    state["audit_verdict"] = {"faithful": False, "reason": "missing the refund window"}
+
+    asyncio.run(researcher_mod.researcher(state, _fake_config()))
+
+    assert "missing the refund window" in captured["prompt"]
+
+
+def test_researcher_no_critique_on_first_pass(monkeypatch):
+    """On the first pass (revision 0), no critique is appended."""
+    captured = _patch_capturing(monkeypatch)
+    state = _state("q")  # revision_count = 0
+    state["audit_verdict"] = {"faithful": False, "reason": "should not appear"}
+
+    asyncio.run(researcher_mod.researcher(state, _fake_config()))
+
+    assert "should not appear" not in captured["prompt"]
