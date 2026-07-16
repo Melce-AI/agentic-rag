@@ -16,14 +16,15 @@ bu iskelete nasıl oturturuz?
 │  Next.js    │◀────│  + Request-ID + Exception + Logging    │
 └─────────────┘     └──────────────┬─────────────────────────┘
        ▲ HITL onay                 │ orchestrate
-       │                  ┌─────────▼──────────┐
-       │                  │  LangGraph Engine   │  (stateful, cyclical)
-       │                  │ Researcher→Analyst  │
-       │                  │   →Auditor (loop)   │
-       │                  └──┬──────────┬───────┘
+       │                  ┌─────────▼──────────────┐
+       │                  │  Operator (ReAct agent) │  (stateful)
+       │                  │  ├ knowledge_base_qa ───┼─▶ RAG loop
+       │                  │  ├ sql_query / logs     │   (Researcher→
+       │                  │  └ sql_execute (HITL) ──┼    Analyst→Auditor)
+       │                  └──┬──────────┬───────────┘
        │           MCP tools │          │ checkpoint
        │              ┌──────▼───┐  ┌───▼────┐
-       └─ interrupt ──│MCP Server│  │ Redis  │ (state/checkpoint)
+       └─ approve ────│MCP Server│  │ Redis  │ (state/checkpoint)
                       │ SQL+File │  └────────┘
                       └────┬─────┘
         ┌──────────┬───────┴────────┬──────────────┐
@@ -107,10 +108,10 @@ mcp  ─┼─▶ agents ─▶ rag ─▶ adapters ─▶ core
 
 | Karar                  | Öneri                                          | Gerekçe |
 |------------------------|------------------------------------------------|---------|
-| Agent orkestrasyonu    | LangGraph `StateGraph` + tek `AgentState`      | Auditor'ın Researcher'a geri dönmesi = cyclical graph; lineer chain bunu yapamaz |
-| State / persistence    | Redis checkpointer                             | Vizyon Adım 3: çökerse kaldığı yerden devam |
-| Human-in-the-Loop      | LangGraph `interrupt()` + SSE event            | Kritik SQL'de graph durur, frontend onay butonu, `Command(resume=...)` ile devam |
-| MCP tool güvenliği     | SQL tool read-only whitelist; DELETE/UPDATE → interrupt | Vizyon: "sadece yetkili tool'larla" |
+| Agent orkestrasyonu    | Üstte tek **Operator** (`create_agent` ReAct); RAG döngüsü `knowledge_base_qa` tool'u olarak sarılı | Operator önce okuyup anlayıp sonra aksiyon alabilir (router'ın read/write'ı baştan sabitlemesi akışı hapsederdi). RAG'in kendi Researcher→Analyst→Auditor döngüsü tool içinde korunur. Bkz. `docs/agents/hitl_operator_plan.md` |
+| State / persistence    | Redis checkpointer                             | Vizyon Adım 3: çökerse kaldığı yerden devam; HITL interrupt/resume için de zorunlu |
+| Human-in-the-Loop      | `HumanInTheLoopMiddleware(interrupt_on={"sql_execute": True})` + SSE `approval_required` event | Gate tam `sql_execute` tool-call sınırında → "onaylanan = çalışan". Pause otomatik, resume harici: `/chat/approve` `/chat/reject` → `Command(resume={"decisions": [...]})` |
+| MCP tool güvenliği     | `sql_query` read-only (sentinel_ro); `sql_execute` write (sentinel_rw + `ensure_write_safe`) sadece HITL onayıyla | İki katmanlı savunma; Vizyon: "sadece yetkili tool'larla" |
 | Streaming              | FastAPI SSE (`StreamingResponse`)              | Tool-call trace'i frontend'e akıt (Adım 4) |
 | Embedding              | Ayrı `embeddings.py` servisi, model adı config'de | 384-dim ayar mevcut; model değişimi tek yerden |
 | Dependency injection   | FastAPI `Depends` + `app.py` wiring            | Singleton `qdrant_manager` yerine test edilebilir DI'a doğru evril |
@@ -119,14 +120,18 @@ mcp  ─┼─▶ agents ─▶ rag ─▶ adapters ─▶ core
 
 ```
 Kullanıcı sorusu
-  → /chat (SSE açılır)
-  → LangGraph: Researcher [MCP/retriever ile context çeker]
-  → Analyst [yanıt + grafik üretir]
-  → Auditor [kaynakla karşılaştırır → faithful?]
-       ├─ Hayır → Researcher'a geri (loop)
-       └─ Evet → kritik aksiyon var mı?
-              ├─ Evet → interrupt → frontend onay → resume
-              └─ Hayır → citations'lı final yanıt stream
+  → /chat (veya /chat/stream — SSE açılır)
+  → Operator (ReAct) niyeti anlar, tool seçer:
+       ├─ Doküman sorusu → knowledge_base_qa
+       │     → RAG döngüsü: Researcher → Analyst → Auditor (faithful? değilse loop) → Finalizer
+       │     → grounded yanıt + citations (artifact üzerinden API'ye taşınır)
+       ├─ Veri sorusu → sql_query / list_tables / describe_table (read-only)
+       ├─ Log sorusu → read_logs
+       └─ Değişiklik → önce SELECT ile etkilenecek satır önizlemesi (affected-rows preview),
+             sonra sql_execute → HumanInTheLoopMiddleware PAUSE
+             → /chat/approve|reject → resume
+                  ├─ approve → yazma çalışır → sonuç yanıtı
+                  └─ reject  → yazma atlanır → model bilgilendirilir
 ```
 
 ## 5. Kararların Gerekçesi (Neden bu yapı?)

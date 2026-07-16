@@ -11,10 +11,13 @@ mapping), `AGENTS.md` (roadmap).
 
 - [x] **Step 1 — Advanced RAG** (chunking, hybrid search, reranking, parsing)
 - [x] **Step 2 — MCP Server** (read-only SQL tools, log tools, safety guards)
-- [~] **Step 3 — Multi-agent orchestration** — graph, nodes, routing, Redis
-      checkpointer, tenant-scoped retrieval all done; HITL interrupt pending.
-- [~] **Step 4 — UI/UX** — Streamlit console done (auth, knowledge base, cited
-      answers); real streaming and HITL approval pending.
+- [x] **Step 3 — Multi-agent orchestration** — graph, nodes, routing, Redis
+      checkpointer, tenant-scoped retrieval done. The RAG pipeline is now the
+      reusable `knowledge_base_qa` subgraph (`build_rag_graph`).
+- [x] **Step 4 — Operator + HITL** — top-level ReAct operator (`build_graph`)
+      over `knowledge_base_qa` + SQL read/write + logs; SSE streaming, citations,
+      and human approval for destructive `sql_execute` via
+      `HumanInTheLoopMiddleware` + `/chat/approve|reject` + Streamlit UI.
 - [ ] **Step 5 — Evals (Ragas faithfulness CI gate)** — not started.
 
 ## Open items (by priority)
@@ -24,8 +27,12 @@ mapping), `AGENTS.md` (roadmap).
       `graph.astream_events(version="v2")`. Emits `node_start`, `node_end`,
       `token`, `tool_call`, `tool_result`, and `final` events live as the graph
       executes. Also fixed missing `tenant_id` in stream config. (Step 4)
-- [ ] **HITL approval flow.** Checkpointer is wired, but there is no `interrupt()`
-      for destructive SQL and no approve/reject endpoint or UI. (Step 3 → 4)
+- [x] **HITL approval flow.** The operator holds `sql_execute` behind
+      `HumanInTheLoopMiddleware(interrupt_on={"sql_execute": True})`, so a
+      destructive write pauses at the tool-call boundary. `/chat/approve/{thread_id}`
+      and `/chat/reject/{thread_id}` resume via `Command(resume=...)`; the
+      Streamlit console shows the SQL + affected-rows preview and Approve/Reject.
+      (Step 4)
 - [ ] **Evals pipeline.** Add Ragas (faithfulness, context precision), a golden
       Q&A dataset, and a CI gate that blocks merge below threshold. (Step 5)
 
@@ -49,6 +56,8 @@ mapping), `AGENTS.md` (roadmap).
       Phase 1 (login + RS256 validation + endpoint protection) is done.
 
 ## Done (recent)
+- [x] HITL write operations (Design B): operator agent + RAG-as-tool +
+      `HumanInTheLoopMiddleware` gate + approve/reject endpoints + Streamlit UI.
 - [x] OpenRouter / OpenAI-compatible LLM gateway support.
 - [x] Tenant-scoped retrieval (rag_search now bound to the request tenant).
 - [x] Streamlit operator console (two-pane: knowledge base + cited Q&A).

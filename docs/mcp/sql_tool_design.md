@@ -47,9 +47,14 @@ layers that fail independently:
 A third, smaller belt: the adapter forces a read-only transaction and caps rows
 with `fetchmany(row_limit)`, so a broad query can't stream an unbounded result.
 
-> Future (Vision Step 3/4): destructive intent won't just be refused — it will
-> trigger a LangGraph `interrupt()` for human approval (HITL). For now the
-> read-only tool refuses outright.
+> Implemented (Vision Step 4): destructive SQL is no longer only refused. A
+> second tool, `sql_execute`, runs a single WHERE-qualified UPDATE/DELETE on a
+> writable table (guarded by `ensure_write_safe` + the `sentinel_rw` role). The
+> top-level operator agent holds it behind `HumanInTheLoopMiddleware`
+> (`interrupt_on={"sql_execute": True}`): the graph pauses at that exact
+> tool-call boundary, a human Approves/Rejects, and only then does the write run
+> ("approved == executed"). The read-only `sql_query` tool still refuses writes
+> outright. See `docs/agents/hitl_operator_plan.md`.
 
 ## Layout & dependency direction
 

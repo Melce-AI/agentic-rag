@@ -8,6 +8,7 @@ The UI is a pure HTTP client; all logic lives in the API.
 import json
 import os
 import time
+import uuid
 
 import requests
 import streamlit as st
@@ -80,6 +81,11 @@ def init_state() -> None:
     st.session_state.setdefault("user_email", None)
     st.session_state.setdefault("tenant_id", DEFAULT_TENANT)
     st.session_state.setdefault("last_answer", None)
+    # Stable per-session conversation thread so a write approval targets the same
+    # paused run. The operator persists state under this id (Redis checkpoint).
+    st.session_state.setdefault("thread_id", f"ui-{uuid.uuid4().hex[:12]}")
+    # A destructive write the operator proposed and is waiting on (Approve/Reject).
+    st.session_state.setdefault("pending_approval", None)
 
 
 init_state()
@@ -154,6 +160,8 @@ with user_col:
         st.session_state.access_token = None
         st.session_state.user_email = None
         st.session_state.last_answer = None
+        st.session_state.pending_approval = None
+        st.session_state.thread_id = f"ui-{uuid.uuid4().hex[:12]}"
         st.rerun()
 
 st.divider()
@@ -267,8 +275,8 @@ NODE_LABEL = {
 with right:
     st.markdown("<div class='eyebrow'>Ask</div>", True)
     st.markdown(
-        "<div class='subtle'>Researcher, Analyst and Auditor agents answer from "
-        "your sources.</div>",
+        "<div class='subtle'>The operator answers from your documents and data, "
+        "and asks for approval before making any change.</div>",
         True,
     )
     st.write("")
@@ -292,7 +300,7 @@ with right:
                     json={
                         "question": question.strip(),
                         "tenant_id": tenant,
-                        "thread_id": None,
+                        "thread_id": st.session_state.thread_id,
                     },
                     headers=auth_headers(),
                     timeout=REQUEST_TIMEOUT,
@@ -333,6 +341,20 @@ with right:
                                 )
                                 status.write(f"Tool Use: `{tool}` ← {hint}")
 
+                            elif kind == "approval_required":
+                                status.update(
+                                    label="Approval required",
+                                    state="complete",
+                                    expanded=False,
+                                )
+                                st.session_state.pending_approval = {
+                                    "thread_id": data.get("thread_id"),
+                                    "sql": data.get("sql", ""),
+                                    "description": data.get("description", ""),
+                                    "question": question.strip(),
+                                }
+                                st.rerun()
+
                             elif kind == "final":
                                 status.update(
                                     label="Done", state="complete", expanded=False
@@ -361,6 +383,67 @@ with right:
 
             except Exception as exc:
                 st.error(f"Request failed: {exc}")
+
+    # --- Pending write approval (HITL) -------------------------------------
+    def _apply_resume(resp: requests.Response, question: str) -> None:
+        """Handle an /chat/approve|reject response: answer, or another pause."""
+        if resp.status_code != 200:
+            st.error(api_error(resp))
+            return
+        data = resp.json()["data"]
+        if data.get("status") == "pending_approval":
+            # The operator proposed a further write — loop the approval UI.
+            st.session_state.pending_approval = {
+                "thread_id": data.get("thread_id"),
+                "sql": data.get("sql", ""),
+                "description": data.get("description", ""),
+                "question": question,
+            }
+        else:
+            st.session_state.pending_approval = None
+            st.session_state.last_answer = {
+                "question": question,
+                "answer": data.get("answer", ""),
+                "citations": data.get("citations", []),
+            }
+        st.rerun()
+
+    pending = st.session_state.pending_approval
+    if pending:
+        with st.container(border=True):
+            st.markdown(
+                "<div class='eyebrow'>Approval required</div>"
+                "<div class='subtle'>The assistant wants to run a change. It will "
+                "not execute until you approve.</div>",
+                unsafe_allow_html=True,
+            )
+            st.code(pending["sql"], language="sql")
+            if pending.get("description"):
+                st.caption(pending["description"])
+            reason = st.text_input(
+                "Rejection reason (optional)", key="reject_reason", placeholder="…"
+            )
+            approve_col, reject_col = st.columns(2)
+            if approve_col.button(
+                "Approve & run", type="primary", use_container_width=True
+            ):
+                with st.spinner("Applying the change…"):
+                    r = requests.post(
+                        f"{API_URL}/chat/approve/{pending['thread_id']}",
+                        json={"tenant_id": tenant},
+                        headers=auth_headers(),
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                _apply_resume(r, pending["question"])
+            if reject_col.button("Reject", use_container_width=True):
+                with st.spinner("Cancelling…"):
+                    r = requests.post(
+                        f"{API_URL}/chat/reject/{pending['thread_id']}",
+                        json={"tenant_id": tenant, "reason": reason or None},
+                        headers=auth_headers(),
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                _apply_resume(r, pending["question"])
 
     answer = st.session_state.last_answer
     if answer:
