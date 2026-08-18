@@ -18,7 +18,7 @@ Most RAG systems are wrappers. They fail in three ways that matter in production
 - **No security boundary.** Credentials live in agent code; every tool call is an injection vector.
 - **No measurement.** "It seems to work" is not an engineering standard.
 
-This project is designed against each failure mode: a cyclical Auditor loop that mathematically checks every response, an MCP process boundary that keeps credentials out of agent code, and a CI/CD faithfulness gate that blocks regressions before they reach production.
+This project is designed against each failure mode: a cyclical Auditor loop that checks every response against its retrieved sources, an MCP process boundary that keeps credentials out of agent code, and — as the remaining step — a CI/CD faithfulness gate to block regressions before they reach production.
 
 ---
 
@@ -79,7 +79,7 @@ flowchart LR
 | 3 | **HITL via `HumanInTheLoopMiddleware` + Redis checkpoint** | The operator holds `sql_execute` behind `interrupt_on={"sql_execute": True}`, so a destructive `UPDATE`/`DELETE` suspends the graph at the exact tool-call boundary — "approved == executed". The approval surfaces the SQL plus an affected-rows preview (the operator runs a `SELECT` with the same `WHERE` first). The pause is automatic; the resume is an external `/chat/approve|reject` request → `Command(resume=...)`, resuming cleanly from the Redis checkpoint regardless of the decision. |
 | 4 | **Hybrid search + cross-encoder reranking** | Dense-only misses exact terms; BM25-only misses paraphrase. RRF fuses both into a Top-20 candidate set; a BGE cross-encoder then scores each query-chunk pair directly, not just embedding similarity, for Top-5. |
 | 5 | **Docling with lightweight fallback** | ML-powered layout analysis (table detection, heading structure) when docling is installed; pypdf/python-docx fallback otherwise. The parser is resolved once at process startup — no runtime branching overhead. |
-| 6 | **CI/CD faithfulness gate** | Quality regressions should fail the build, not reach production. A Ragas faithfulness score < 0.85 on any PR blocks merge to `main` — the same guarantee a failing unit test provides for code correctness. |
+| 6 | **CI/CD faithfulness gate** *(planned — Step 5)* | Quality regressions should fail the build, not reach production. The design: a Ragas faithfulness score < 0.85 on any PR blocks merge to `main` — the same guarantee a failing unit test provides for code correctness. Not yet implemented. |
 
 ---
 
@@ -89,11 +89,11 @@ flowchart LR
 
 | Service | Image | Role |
 |---|---|---|
-| `api` | `infra/api/Dockerfile` | FastAPI — routers, middleware, SSE streaming |
-| `frontend` | `infra/frontend/Dockerfile` | Streamlit — trace viewer, HITL approval, citations |
+| `api` | `infra/Dockerfile` (target `api`) | FastAPI — routers, middleware, SSE streaming |
+| `frontend` | `infra/Dockerfile` (target `frontend`) | Streamlit (`streamlit/app.py`) — trace viewer, HITL approval, citations |
 | `qdrant` | `qdrant/qdrant` | Hybrid vector DB (dense + sparse) |
 | `postgres` | `postgres:16` | Structured operational data |
-| `redis` | `redis:7-alpine` | LangGraph state checkpointer |
+| `redis` | `redis/redis-stack-server:7.4.0-v3` | LangGraph state checkpointer (needs the RediSearch module — plain `redis:alpine` lacks `FT._LIST`) |
 | `phoenix` | `infra/phoenix/docker-compose.yml` | OTEL trace collector + dashboard |
 
 > **MCP Server** runs as a stdio subprocess (launched by the agent process), not a separate Docker service.
@@ -107,7 +107,7 @@ src/
 ├── agents/       graph (operator) · service · models · mcp_client · llm · checkpointer · prompts/
 │   └── knowledge_base/  graph (RAG pipeline) · tool (knowledge_base_qa) · state · nodes/ · prompts/
 ├── mcp_server/   server · tools/ (rag_search · read_logs · sql read+write · list_tables · describe_table)
-├── evals/        datasets/ · ragas_runner.py
+├── auth/         JWT issuer · validator · RSA key loading · role claims · request dependency
 ├── adapters/     vector_store/qdrant.py · sql/postgres.py
 ├── observability/ logging · tracing
 ├── schemas/      Pydantic DTOs
@@ -147,7 +147,10 @@ The Auditor runs an entailment check on every response using structured output (
 Two independent layers stop it: the `ensure_read_only()` guard in the MCP tool layer, and the `sentinel_ro` least-privilege Postgres role the adapter connects with. The graph also suspends for explicit human approval before any destructive operation.
 
 **"How do you prevent a prompt change from silently degrading quality?"**
-Ragas faithfulness < 0.85 on any PR fails the GitHub Actions check and blocks the merge.
+Today, only at runtime: the Auditor rejects an unfaithful answer before it ships. The offline guarantee — Ragas faithfulness < 0.85 on any PR failing the GitHub Actions check and blocking the merge — is designed but not yet built (Step 5).
+
+**"Who is allowed to call any of this?"**
+Every functional router — `/chat`, `/documents`, `/search` — sits behind a `Depends(current_user)` bearer-token dependency; there is no unauthenticated path to the agent or the index. Tokens are signed with an RSA keypair loaded once at startup, so a missing or malformed key fails the process immediately rather than on the first login. Decoded claims carry roles, giving authorization a place to grow into.
 
 **"What if the agent crashes mid-conversation?"**
 LangGraph checkpoints to Redis after each node. The next request resumes from the last committed state.
